@@ -1,4 +1,6 @@
 import type { EmbeddedTweet, TweetDraft } from "../tweet-import/types";
+import { Fragment } from "react";
+import type { ReactNode } from "react";
 
 type TweetCardProps = {
   draft: TweetDraft;
@@ -51,16 +53,12 @@ export function TweetCard({ draft }: TweetCardProps) {
       </header>
 
       <div className="tweet-card__body">
-        {draft.bodyHtml ? (
-          <p
-            className="tweet-card__text"
-            dangerouslySetInnerHTML={{ __html: draft.bodyHtml }}
-          />
-        ) : (
-          <p className="tweet-card__text">
-            {draft.body || "Paste the tweet text or import it from a link."}
-          </p>
-        )}
+        <p className="tweet-card__text">
+          {renderTweetBody(
+            draft.body || "Paste the tweet text or import it from a link.",
+            draft.bodyHtml,
+          )}
+        </p>
         <MediaGallery mediaUrls={mediaUrls} alt="Tweet media preview" />
         {draft.quotedTweet ? (
           <QuotedTweetCard tweet={draft.quotedTweet} />
@@ -125,14 +123,9 @@ function QuotedTweetCard({ tweet }: { tweet: EmbeddedTweet }) {
         </div>
       </div>
 
-      {tweet.bodyHtml ? (
-        <p
-          className="tweet-card__quote-text"
-          dangerouslySetInnerHTML={{ __html: tweet.bodyHtml }}
-        />
-      ) : (
-        <p className="tweet-card__quote-text">{tweet.body}</p>
-      )}
+      <p className="tweet-card__quote-text">
+        {renderTweetBody(tweet.body, tweet.bodyHtml)}
+      </p>
 
       <MediaGallery
         mediaUrls={mediaUrls}
@@ -213,4 +206,100 @@ function VerifiedBadge({ label }: { label: string }) {
       </svg>
     </span>
   );
+}
+
+function renderTweetBody(text: string, bodyHtml: string): ReactNode[] {
+  if (!bodyHtml) {
+    return renderAccentText(text, "plain");
+  }
+
+  const document = new DOMParser().parseFromString(
+    `<p>${bodyHtml}</p>`,
+    "text/html",
+  );
+  const root = document.querySelector("p");
+
+  if (!root) {
+    return renderAccentText(text, "fallback");
+  }
+
+  return renderAccentNodes(Array.from(root.childNodes), "html");
+}
+
+function renderAccentNodes(nodes: ChildNode[], keyPrefix: string): ReactNode[] {
+  return nodes.flatMap((node, index) =>
+    renderAccentNode(node, `${keyPrefix}-${index}`),
+  );
+}
+
+function renderAccentNode(node: ChildNode, keyPrefix: string): ReactNode[] {
+  if (node.nodeType === Node.TEXT_NODE) {
+    return renderAccentText(node.textContent ?? "", keyPrefix);
+  }
+
+  if (node.nodeType !== Node.ELEMENT_NODE) {
+    return [];
+  }
+
+  const element = node as Element;
+  const tagName = element.tagName.toLowerCase();
+
+  if (tagName === "br") {
+    return [<br key={keyPrefix} />];
+  }
+
+  const children = renderAccentNodes(
+    Array.from(element.childNodes),
+    `${keyPrefix}-${tagName}`,
+  );
+
+  if (tagName === "strong" || tagName === "b") {
+    return [<strong key={keyPrefix}>{children}</strong>];
+  }
+
+  if (tagName === "em" || tagName === "i") {
+    return [<em key={keyPrefix}>{children}</em>];
+  }
+
+  return [<Fragment key={keyPrefix}>{children}</Fragment>];
+}
+
+function renderAccentText(text: string, keyPrefix: string): ReactNode[] {
+  const accentPattern = /[@#][A-Za-z0-9_]+/g;
+  const nodes: ReactNode[] = [];
+  let lastIndex = 0;
+
+  for (const match of text.matchAll(accentPattern)) {
+    const matchText = match[0];
+    const matchIndex = match.index ?? 0;
+
+    if (matchIndex > lastIndex) {
+      nodes.push(
+        <Fragment key={`${keyPrefix}-text-${lastIndex}`}>
+          {text.slice(lastIndex, matchIndex)}
+        </Fragment>,
+      );
+    }
+
+    nodes.push(
+      <span
+        className="tweet-card__accent"
+        key={`${keyPrefix}-accent-${matchIndex}`}
+      >
+        {matchText}
+      </span>,
+    );
+
+    lastIndex = matchIndex + matchText.length;
+  }
+
+  if (lastIndex < text.length) {
+    nodes.push(
+      <Fragment key={`${keyPrefix}-text-tail`}>
+        {text.slice(lastIndex)}
+      </Fragment>,
+    );
+  }
+
+  return nodes;
 }

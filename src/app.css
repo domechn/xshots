@@ -610,6 +610,10 @@
   white-space: pre-wrap;
 }
 
+.tweet-card__accent {
+  color: #1d9bf0;
+}
+
 .tweet-card__media-grid {
   display: grid;
   gap: 0.18rem;

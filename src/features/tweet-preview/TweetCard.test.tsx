@@ -110,6 +110,47 @@ describe("TweetCard", () => {
     );
   });
 
+  it("styles mentions and hashtags in tweet text with x blue", () => {
+    const { container } = render(
+      <TweetCard
+        draft={createEmptyDraft({
+          authorName: "SpaceX",
+          handle: "SpaceX",
+          body: "Checking in with @NASA about #Starship today.",
+        })}
+      />,
+    );
+
+    const accents = container.querySelectorAll(".tweet-card__accent");
+
+    expect(accents).toHaveLength(2);
+    expect(accents[0]).toHaveTextContent("@NASA");
+    expect(accents[1]).toHaveTextContent("#Starship");
+  });
+
+  it("styles mentions and hashtags in preserved bodyHtml with x blue", () => {
+    const { container } = render(
+      <TweetCard
+        draft={createEmptyDraft({
+          authorName: "SpaceX",
+          handle: "SpaceX",
+          body: "Flight update:\n@NASA says #Starship is go",
+          bodyHtml:
+            "Flight update:<br><strong>@NASA</strong> says <em>#Starship</em> is go",
+        })}
+      />,
+    );
+
+    const accents = container.querySelectorAll(".tweet-card__accent");
+
+    expect(accents).toHaveLength(2);
+    expect(accents[0]).toHaveTextContent("@NASA");
+    expect(accents[0].tagName).toBe("SPAN");
+    expect(accents[0].parentElement?.tagName).toBe("STRONG");
+    expect(accents[1]).toHaveTextContent("#Starship");
+    expect(accents[1].parentElement?.tagName).toBe("EM");
+  });
+
   it("renders a quoted tweet block when quoted content is present", () => {
     const { container } = render(
       <TweetCard
