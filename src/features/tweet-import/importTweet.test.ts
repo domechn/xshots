@@ -51,6 +51,48 @@ describe("importTweetFromUrl", () => {
     });
   });
 
+  it("upgrades insecure twitter asset urls from the richer payload", async () => {
+    const result = await importTweetFromUrl(
+      "https://x.com/SpaceX/status/1915324363727337943",
+      {
+        fetcher: async () => ({
+          ok: true,
+          status: 200,
+          json: async () => ({
+            code: 200,
+            status: {
+              text: "Starship reached orbit.",
+              created_at: "April 23, 2026",
+              author: {
+                name: "SpaceX",
+                screen_name: "SpaceX",
+                avatar_url: "http://pbs.twimg.com/profile_images/spacex.jpg",
+              },
+              media: {
+                photos: [
+                  {
+                    url: "http://pbs.twimg.com/media/starship-launch.jpg",
+                  },
+                ],
+              },
+            },
+          }),
+        }),
+      },
+    );
+
+    expect(result.status).toBe("success");
+    expect(result.draft.avatarUrl).toBe(
+      "https://pbs.twimg.com/profile_images/spacex.jpg",
+    );
+    expect(result.draft.mediaUrl).toBe(
+      "https://pbs.twimg.com/media/starship-launch.jpg",
+    );
+    expect(result.draft.mediaUrls).toEqual([
+      "https://pbs.twimg.com/media/starship-launch.jpg",
+    ]);
+  });
+
   it("keeps all photo media urls from a richer tweet payload", async () => {
     const result = await importTweetFromUrl(
       "https://x.com/SpaceX/status/1915324363727337943",

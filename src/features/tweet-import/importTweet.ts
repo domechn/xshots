@@ -410,15 +410,17 @@ function extractEmbeddedTweet(
       ...(status.media?.all ?? [])
         .filter((item) => item.type === "photo")
         .map((item) => item.url ?? ""),
-    ].filter(Boolean),
+    ]
+      .map((mediaUrl) => normalizeAssetUrl(mediaUrl))
+      .filter(Boolean),
   );
 
-  const mediaUrl =
-    mediaUrls[0] ??
+  const mediaUrl = mediaUrls[0] ?? normalizeAssetUrl(
     status.media?.all?.find((item) => Boolean(item.url))?.url ??
-    status.media?.videos?.find((video) => Boolean(video.thumbnail_url))
-      ?.thumbnail_url ??
-    "";
+      status.media?.videos?.find((video) => Boolean(video.thumbnail_url))
+        ?.thumbnail_url ??
+      "",
+  );
 
   return {
     sourceUrl,
@@ -427,11 +429,36 @@ function extractEmbeddedTweet(
     body,
     bodyHtml: "",
     timestampLabel: collapseWhitespace(status.created_at ?? ""),
-    avatarUrl: status.author?.avatar_url ?? "",
+    avatarUrl: normalizeAssetUrl(status.author?.avatar_url ?? ""),
     mediaUrl,
     mediaUrls,
     verified: Boolean(status.author?.verification?.verified),
   };
+}
+
+function normalizeAssetUrl(assetUrl: string): string {
+  if (!assetUrl) {
+    return "";
+  }
+
+  try {
+    const url = new URL(assetUrl);
+
+    if (
+      url.protocol === "http:" &&
+      ["twimg.com", "twitter.com", "x.com"].some(
+        (hostname) =>
+          url.hostname === hostname || url.hostname.endsWith(`.${hostname}`),
+      )
+    ) {
+      url.protocol = "https:";
+      return url.toString();
+    }
+  } catch {
+    return assetUrl;
+  }
+
+  return assetUrl;
 }
 
 function dedupeMediaUrls(mediaUrls: string[]): string[] {
