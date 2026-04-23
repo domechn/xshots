@@ -1,7 +1,5 @@
 node_modules
-dist
 coverage
 .DS_Store
 .vscode/*.log
 .playwright-mcp/
-node_modules/
