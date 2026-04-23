@@ -1,0 +1,91 @@
+:root {
+  --space-black: #05070a;
+  --spectral-white: #f3f1eb;
+  --ghost-surface: rgba(243, 241, 235, 0.1);
+  --ghost-strong: rgba(243, 241, 235, 0.2);
+  --line-soft: rgba(243, 241, 235, 0.16);
+  --line-strong: rgba(243, 241, 235, 0.28);
+  --signal-cyan: #7ee0ff;
+  --signal-amber: #f3c969;
+  --signal-red: #ff7b7b;
+  --panel-shadow: none;
+  --radius-pill: 999px;
+  --radius-sm: 4px;
+  --radius-lg: 28px;
+  --radius-xl: 36px;
+  --space-1: 0.3rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.5rem;
+  --space-6: 2rem;
+  --space-7: 3rem;
+  --space-8: 4rem;
+  --font-display:
+    "Avenir Next Condensed", "Arial Narrow", "Franklin Gothic Medium",
+    sans-serif;
+  --font-body: "IBM Plex Sans", "Segoe UI", sans-serif;
+  --max-width: 1440px;
+  --page-padding: clamp(1rem, 2.4vw, 2rem);
+  color: var(--spectral-white);
+  background: var(--space-black);
+  font-family: var(--font-body);
+  text-rendering: optimizeLegibility;
+  font-synthesis: none;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  min-height: 100%;
+}
+
+body {
+  margin: 0;
+  background:
+    radial-gradient(
+      circle at 20% 18%,
+      rgba(126, 224, 255, 0.16),
+      transparent 24%
+    ),
+    radial-gradient(
+      circle at 78% 22%,
+      rgba(243, 201, 105, 0.12),
+      transparent 28%
+    ),
+    radial-gradient(
+      circle at 50% 110%,
+      rgba(243, 241, 235, 0.08),
+      transparent 40%
+    ),
+    linear-gradient(180deg, #020304 0%, #05070a 45%, #090d14 100%);
+}
+
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background:
+    linear-gradient(rgba(243, 241, 235, 0.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(243, 241, 235, 0.04) 1px, transparent 1px);
+  background-size: 64px 64px;
+  mask-image: linear-gradient(180deg, rgba(0, 0, 0, 0.7), transparent 90%);
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+}
+
+a {
+  color: inherit;
+}
