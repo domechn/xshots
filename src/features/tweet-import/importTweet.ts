@@ -415,12 +415,14 @@ function extractEmbeddedTweet(
       .filter(Boolean),
   );
 
-  const mediaUrl = mediaUrls[0] ?? normalizeAssetUrl(
-    status.media?.all?.find((item) => Boolean(item.url))?.url ??
-      status.media?.videos?.find((video) => Boolean(video.thumbnail_url))
-        ?.thumbnail_url ??
-      "",
-  );
+  const mediaUrl =
+    mediaUrls[0] ??
+    normalizeAssetUrl(
+      status.media?.all?.find((item) => Boolean(item.url))?.url ??
+        status.media?.videos?.find((video) => Boolean(video.thumbnail_url))
+          ?.thumbnail_url ??
+        "",
+    );
 
   return {
     sourceUrl,
