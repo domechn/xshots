@@ -2,6 +2,39 @@ import { describe, expect, it } from "vitest";
 import { importTweetFromUrl } from "./importTweet";
 
 describe("importTweetFromUrl", () => {
+  it("maps reply, repost, and like counts from a richer tweet payload", async () => {
+    const result = await importTweetFromUrl(
+      "https://x.com/SpaceX/status/1915324363727337943",
+      {
+        fetcher: async () => ({
+          ok: true,
+          status: 200,
+          json: async () => ({
+            code: 200,
+            status: {
+              text: "Starship reached orbit.",
+              created_at: "April 23, 2026",
+              replies: 128,
+              retweets: 7420,
+              likes: 89000,
+              author: {
+                name: "SpaceX",
+                screen_name: "SpaceX",
+              },
+            },
+          }),
+        }),
+      },
+    );
+
+    expect(result.status).toBe("success");
+    expect(result.draft).toMatchObject({
+      replyCount: 128,
+      repostCount: 7420,
+      likeCount: 89000,
+    });
+  });
+
   it("maps avatar, media, and verification from a richer tweet payload", async () => {
     const result = await importTweetFromUrl(
       "https://x.com/SpaceX/status/1915324363727337943",

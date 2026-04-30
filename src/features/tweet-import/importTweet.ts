@@ -51,6 +51,27 @@ type RichTweetStatus = {
   quoted?: RichTweetQuoteCandidate | null;
   quoted_tweet?: RichTweetQuoteCandidate | null;
   quoted_status?: RichTweetQuoteCandidate | null;
+  replies?: number | string;
+  reply_count?: number | string;
+  retweets?: number | string;
+  retweet_count?: number | string;
+  likes?: number | string;
+  favorites?: number | string;
+  favourite_count?: number | string;
+  favorite_count?: number | string;
+  engagement?: RichTweetMetrics;
+  stats?: RichTweetMetrics;
+};
+
+type RichTweetMetrics = {
+  replies?: number | string;
+  reply_count?: number | string;
+  retweets?: number | string;
+  retweet_count?: number | string;
+  likes?: number | string;
+  favorites?: number | string;
+  favourite_count?: number | string;
+  favorite_count?: number | string;
 };
 
 type FetchResponseLike = {
@@ -390,8 +411,82 @@ function extractDraftFromRichPayload(
 
   return {
     ...tweet,
+    ...extractEngagementCounts(payload.status),
     quotedTweet: extractQuotedTweet(payload.status),
   };
+}
+
+function extractEngagementCounts(
+  status: RichTweetStatus | undefined,
+): Pick<
+  ReturnType<typeof createEmptyDraft>,
+  "replyCount" | "repostCount" | "likeCount"
+> {
+  return {
+    replyCount: readMetricCount(
+      status?.replies,
+      status?.reply_count,
+      status?.engagement?.replies,
+      status?.engagement?.reply_count,
+      status?.stats?.replies,
+      status?.stats?.reply_count,
+    ),
+    repostCount: readMetricCount(
+      status?.retweets,
+      status?.retweet_count,
+      status?.engagement?.retweets,
+      status?.engagement?.retweet_count,
+      status?.stats?.retweets,
+      status?.stats?.retweet_count,
+    ),
+    likeCount: readMetricCount(
+      status?.likes,
+      status?.favorites,
+      status?.favourite_count,
+      status?.favorite_count,
+      status?.engagement?.likes,
+      status?.engagement?.favorites,
+      status?.engagement?.favourite_count,
+      status?.engagement?.favorite_count,
+      status?.stats?.likes,
+      status?.stats?.favorites,
+      status?.stats?.favourite_count,
+      status?.stats?.favorite_count,
+    ),
+  };
+}
+
+function readMetricCount(
+  ...values: Array<number | string | null | undefined>
+): number | null {
+  for (const value of values) {
+    if (typeof value === "number") {
+      if (Number.isFinite(value) && value >= 0) {
+        return value;
+      }
+
+      continue;
+    }
+
+    if (typeof value !== "string") {
+      continue;
+    }
+
+    const trimmedValue = value.trim();
+
+    if (!trimmedValue) {
+      continue;
+    }
+
+    const normalizedValue = trimmedValue.replace(/,/g, "");
+    const parsedValue = Number(normalizedValue);
+
+    if (Number.isFinite(parsedValue) && parsedValue >= 0) {
+      return parsedValue;
+    }
+  }
+
+  return null;
 }
 
 function extractEmbeddedTweet(

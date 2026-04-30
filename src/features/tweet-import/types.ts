@@ -16,6 +16,9 @@ export type EmbeddedTweet = {
 export type TweetDraft = EmbeddedTweet & {
   themeVariant: ThemeVariant;
   quotedTweet: EmbeddedTweet | null;
+  replyCount: number | null;
+  repostCount: number | null;
+  likeCount: number | null;
 };
 
 export type TweetImportResult =
@@ -43,6 +46,9 @@ export function createEmptyDraft(seed: Partial<TweetDraft> = {}): TweetDraft {
     verified: false,
     themeVariant: "orbital",
     quotedTweet: null,
+    replyCount: null,
+    repostCount: null,
+    likeCount: null,
     ...seed,
   };
 }

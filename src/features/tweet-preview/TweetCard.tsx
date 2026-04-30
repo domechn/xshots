@@ -2,6 +2,11 @@ import type { EmbeddedTweet, TweetDraft } from "../tweet-import/types";
 import { Fragment } from "react";
 import type { ReactNode } from "react";
 
+const ENGAGEMENT_COUNT_FORMATTER = new Intl.NumberFormat("en-US", {
+  notation: "compact",
+  maximumFractionDigits: 1,
+});
+
 type TweetCardProps = {
   draft: TweetDraft;
 };
@@ -64,6 +69,8 @@ export function TweetCard({ draft }: TweetCardProps) {
           <QuotedTweetCard tweet={draft.quotedTweet} />
         ) : null}
       </div>
+
+      <EngagementMetrics draft={draft} />
 
       <footer className="tweet-card__footer">
         <span>{draft.timestampLabel || "Add launch timestamp"}</span>
@@ -205,6 +212,153 @@ function VerifiedBadge({ label }: { label: string }) {
         />
       </svg>
     </span>
+  );
+}
+
+function EngagementMetrics({ draft }: { draft: TweetDraft }) {
+  const metrics: Array<{
+    key: string;
+    label: string;
+    count: number;
+    icon: ReactNode;
+  }> = [];
+
+  if (draft.replyCount !== null) {
+    metrics.push({
+      key: "replies",
+      label: "Replies",
+      count: draft.replyCount,
+      icon: <ReplyIcon />,
+    });
+  }
+
+  if (draft.repostCount !== null) {
+    metrics.push({
+      key: "reposts",
+      label: "Reposts",
+      count: draft.repostCount,
+      icon: <RepostIcon />,
+    });
+  }
+
+  if (draft.likeCount !== null) {
+    metrics.push({
+      key: "likes",
+      label: "Likes",
+      count: draft.likeCount,
+      icon: <LikeIcon />,
+    });
+  }
+
+  if (!metrics.length) {
+    return null;
+  }
+
+  return (
+    <div
+      className="tweet-card__engagement"
+      aria-label="Tweet engagement metrics"
+    >
+      {metrics.map((metric) => {
+        const formattedCount = formatEngagementCount(metric.count);
+
+        return (
+          <span
+            className="tweet-card__engagement-item"
+            key={metric.key}
+            aria-label={`${metric.label} ${formattedCount}`}
+          >
+            <span className="tweet-card__engagement-icon" aria-hidden="true">
+              {metric.icon}
+            </span>
+            <span className="tweet-card__engagement-count">
+              {formattedCount}
+            </span>
+          </span>
+        );
+      })}
+    </div>
+  );
+}
+
+function formatEngagementCount(count: number): string {
+  return ENGAGEMENT_COUNT_FORMATTER.format(count);
+}
+
+function ReplyIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <path
+        d="M4 6.5h8.5a6 6 0 0 1 0 12H9"
+        fill="none"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="1.8"
+      />
+      <path
+        d="M9 15.5 4 18.5v-6"
+        fill="none"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="1.8"
+      />
+    </svg>
+  );
+}
+
+function RepostIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <path
+        d="M7 7h10l-2.5-2.5"
+        fill="none"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="1.8"
+      />
+      <path
+        d="M17 7 19.5 4.5"
+        fill="none"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="1.8"
+      />
+      <path
+        d="M17 17H7l2.5 2.5"
+        fill="none"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="1.8"
+      />
+      <path
+        d="M7 17 4.5 19.5"
+        fill="none"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="1.8"
+      />
+    </svg>
+  );
+}
+
+function LikeIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <path
+        d="M12 20.25 5.35 13.9a4.55 4.55 0 0 1 0-6.52 4.69 4.69 0 0 1 6.65 0L12 8.38l.01-.01a4.69 4.69 0 0 1 6.64 0 4.55 4.55 0 0 1 0 6.52Z"
+        fill="none"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="1.8"
+      />
+    </svg>
   );
 }
 

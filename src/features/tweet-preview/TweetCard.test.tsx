@@ -110,6 +110,33 @@ describe("TweetCard", () => {
     );
   });
 
+  it("renders reply, repost, and like metrics when counts are available", () => {
+    const { container } = render(
+      <TweetCard
+        draft={{
+          ...createEmptyDraft({
+            authorName: "SpaceX",
+            handle: "SpaceX",
+            body: "Engagement snapshot.",
+          }),
+          replyCount: 128,
+          repostCount: 7420,
+          likeCount: 89000,
+        }}
+      />,
+    );
+
+    expect(screen.getByText("128")).toBeInTheDocument();
+    expect(screen.getByText("7.4K")).toBeInTheDocument();
+    expect(screen.getByText("89K")).toBeInTheDocument();
+    expect(screen.getByLabelText("Replies 128")).toBeInTheDocument();
+    expect(screen.getByLabelText("Reposts 7.4K")).toBeInTheDocument();
+    expect(screen.getByLabelText("Likes 89K")).toBeInTheDocument();
+    expect(
+      container.querySelectorAll(".tweet-card__engagement-item"),
+    ).toHaveLength(3);
+  });
+
   it("styles mentions and hashtags in tweet text with x blue", () => {
     const { container } = render(
       <TweetCard
