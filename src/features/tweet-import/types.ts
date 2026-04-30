@@ -19,6 +19,7 @@ export type TweetDraft = EmbeddedTweet & {
   replyCount: number | null;
   repostCount: number | null;
   likeCount: number | null;
+  bookmarkCount: number | null;
 };
 
 export type TweetImportResult =
@@ -49,6 +50,7 @@ export function createEmptyDraft(seed: Partial<TweetDraft> = {}): TweetDraft {
     replyCount: null,
     repostCount: null,
     likeCount: null,
+    bookmarkCount: null,
     ...seed,
   };
 }

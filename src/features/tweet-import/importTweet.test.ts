@@ -2,7 +2,97 @@ import { describe, expect, it } from "vitest";
 import { importTweetFromUrl } from "./importTweet";
 
 describe("importTweetFromUrl", () => {
-  it("maps reply, repost, and like counts from a richer tweet payload", async () => {
+  it("formats raw x created_at timestamps into a compact footer label", async () => {
+    const result = await importTweetFromUrl(
+      "https://x.com/Pluvio9yte/status/2049742800049316039",
+      {
+        fetcher: async () => ({
+          ok: true,
+          status: 200,
+          json: async () => ({
+            code: 200,
+            status: {
+              text: "Example tweet.",
+              created_at: "Thu Apr 30 06:49:00 +0000 2026",
+              author: {
+                name: "雪踏乌云",
+                screen_name: "Pluvio9yte",
+              },
+            },
+          }),
+        }),
+      },
+    );
+
+    expect(result.status).toBe("success");
+    expect(result.draft.timestampLabel).toBe("Apr 30, 2026 · 6:49 AM UTC");
+  });
+
+  it("combines repost and quote counts to match x's displayed repost total", async () => {
+    const result = await importTweetFromUrl(
+      "https://x.com/Pluvio9yte/status/2049742800049316039",
+      {
+        fetcher: async () => ({
+          ok: true,
+          status: 200,
+          json: async () => ({
+            code: 200,
+            status: {
+              text: "Example tweet.",
+              created_at: "April 30, 2026",
+              replies: 45,
+              reposts: 0,
+              quotes: 5,
+              likes: 52,
+              bookmarks: 29,
+              author: {
+                name: "雪踏乌云",
+                screen_name: "Pluvio9yte",
+              },
+            },
+          }),
+        }),
+      },
+    );
+
+    expect(result.status).toBe("success");
+    expect(result.draft).toMatchObject({
+      replyCount: 45,
+      repostCount: 5,
+      likeCount: 52,
+      bookmarkCount: 29,
+    });
+  });
+
+  it("adds quotes to repost counts when both are present", async () => {
+    const result = await importTweetFromUrl(
+      "https://x.com/example/status/123",
+      {
+        fetcher: async () => ({
+          ok: true,
+          status: 200,
+          json: async () => ({
+            code: 200,
+            status: {
+              text: "Example tweet.",
+              created_at: "April 30, 2026",
+              reposts: 1,
+              quotes: 5,
+              author: {
+                name: "Example",
+                screen_name: "example",
+              },
+            },
+          }),
+        }),
+      },
+    );
+
+    expect(result.status).toBe("success");
+    expect(result.draft.repostCount).toBe(6);
+  });
+
+  it("maps reply, repost, like, and bookmark counts from a richer tweet payload", async () => {
     const result = await importTweetFromUrl(
       "https://x.com/SpaceX/status/1915324363727337943",
       {
@@ -17,6 +107,7 @@ describe("importTweetFromUrl", () => {
               replies: 128,
               retweets: 7420,
               likes: 89000,
+              bookmark_count: 29,
               author: {
                 name: "SpaceX",
                 screen_name: "SpaceX",
@@ -32,6 +123,7 @@ describe("importTweetFromUrl", () => {
       replyCount: 128,
       repostCount: 7420,
       likeCount: 89000,
+      bookmarkCount: 29,
     });
   });
 

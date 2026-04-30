@@ -110,7 +110,7 @@ describe("TweetCard", () => {
     );
   });
 
-  it("renders reply, repost, and like metrics when counts are available", () => {
+  it("renders reply, repost, like, and bookmark actions in x order", () => {
     const { container } = render(
       <TweetCard
         draft={{
@@ -122,6 +122,7 @@ describe("TweetCard", () => {
           replyCount: 128,
           repostCount: 7420,
           likeCount: 89000,
+          bookmarkCount: 29,
         }}
       />,
     );
@@ -129,12 +130,19 @@ describe("TweetCard", () => {
     expect(screen.getByText("128")).toBeInTheDocument();
     expect(screen.getByText("7.4K")).toBeInTheDocument();
     expect(screen.getByText("89K")).toBeInTheDocument();
+    expect(screen.getByText("29")).toBeInTheDocument();
     expect(screen.getByLabelText("Replies 128")).toBeInTheDocument();
     expect(screen.getByLabelText("Reposts 7.4K")).toBeInTheDocument();
     expect(screen.getByLabelText("Likes 89K")).toBeInTheDocument();
+    expect(screen.getByLabelText("Bookmarks 29")).toBeInTheDocument();
+    expect(
+      Array.from(
+        container.querySelectorAll(".tweet-card__engagement-item"),
+      ).map((item) => item.getAttribute("aria-label")),
+    ).toEqual(["Replies 128", "Reposts 7.4K", "Likes 89K", "Bookmarks 29"]);
     expect(
       container.querySelectorAll(".tweet-card__engagement-item"),
-    ).toHaveLength(3);
+    ).toHaveLength(4);
   });
 
   it("styles mentions and hashtags in tweet text with x blue", () => {

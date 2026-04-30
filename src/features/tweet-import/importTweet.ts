@@ -53,12 +53,20 @@ type RichTweetStatus = {
   quoted_status?: RichTweetQuoteCandidate | null;
   replies?: number | string;
   reply_count?: number | string;
+  reposts?: number | string;
+  repost_count?: number | string;
+  quotes?: number | string;
+  quote_count?: number | string;
+  quoteCount?: number | string;
   retweets?: number | string;
   retweet_count?: number | string;
   likes?: number | string;
   favorites?: number | string;
   favourite_count?: number | string;
   favorite_count?: number | string;
+  bookmarks?: number | string;
+  bookmark_count?: number | string;
+  bookmarkCount?: number | string;
   engagement?: RichTweetMetrics;
   stats?: RichTweetMetrics;
 };
@@ -66,12 +74,20 @@ type RichTweetStatus = {
 type RichTweetMetrics = {
   replies?: number | string;
   reply_count?: number | string;
+  reposts?: number | string;
+  repost_count?: number | string;
+  quotes?: number | string;
+  quote_count?: number | string;
+  quoteCount?: number | string;
   retweets?: number | string;
   retweet_count?: number | string;
   likes?: number | string;
   favorites?: number | string;
   favourite_count?: number | string;
   favorite_count?: number | string;
+  bookmarks?: number | string;
+  bookmark_count?: number | string;
+  bookmarkCount?: number | string;
 };
 
 type FetchResponseLike = {
@@ -237,6 +253,50 @@ function readHandleFromAuthorUrl(authorUrl?: string): string | null {
 
 function collapseWhitespace(value: string): string {
   return value.replace(/\s+/g, " ").trim();
+}
+
+function formatTimestampLabel(value: string): string {
+  const normalizedValue = collapseWhitespace(value);
+
+  if (!normalizedValue) {
+    return "";
+  }
+
+  const rawTimestampMatch = normalizedValue.match(
+    /^(Mon|Tue|Wed|Thu|Fri|Sat|Sun) ([A-Z][a-z]{2}) (\d{1,2}) (\d{2}):(\d{2}):(\d{2}) ([+-]\d{4}) (\d{4})$/,
+  );
+
+  if (!rawTimestampMatch) {
+    return normalizedValue;
+  }
+
+  const [, , month, day, rawHours, minutes, , offset, year] = rawTimestampMatch;
+  const hours = Number(rawHours);
+  const meridiem = hours >= 12 ? "PM" : "AM";
+  const hours12 = hours % 12 || 12;
+  const timezoneLabel = formatUtcOffsetLabel(offset);
+
+  return `${month} ${Number(day)}, ${year} · ${hours12}:${minutes} ${meridiem}${timezoneLabel ? ` ${timezoneLabel}` : ""}`;
+}
+
+function formatUtcOffsetLabel(offset: string): string {
+  if (offset === "+0000" || offset === "-0000") {
+    return "UTC";
+  }
+
+  const sign = offset.startsWith("-") ? "-" : "+";
+  const hours = Number(offset.slice(1, 3));
+  const minutes = offset.slice(3, 5);
+
+  if (!Number.isFinite(hours)) {
+    return `UTC${offset}`;
+  }
+
+  if (minutes === "00") {
+    return `UTC${sign}${hours}`;
+  }
+
+  return `UTC${sign}${hours}:${minutes}`;
 }
 
 function normalizeTweetText(value: string): string {
@@ -420,7 +480,7 @@ function extractEngagementCounts(
   status: RichTweetStatus | undefined,
 ): Pick<
   ReturnType<typeof createEmptyDraft>,
-  "replyCount" | "repostCount" | "likeCount"
+  "replyCount" | "repostCount" | "likeCount" | "bookmarkCount"
 > {
   return {
     replyCount: readMetricCount(
@@ -431,14 +491,7 @@ function extractEngagementCounts(
       status?.stats?.replies,
       status?.stats?.reply_count,
     ),
-    repostCount: readMetricCount(
-      status?.retweets,
-      status?.retweet_count,
-      status?.engagement?.retweets,
-      status?.engagement?.retweet_count,
-      status?.stats?.retweets,
-      status?.stats?.retweet_count,
-    ),
+    repostCount: readMetricCount(readDisplayedRepostCount(status)),
     likeCount: readMetricCount(
       status?.likes,
       status?.favorites,
@@ -453,7 +506,54 @@ function extractEngagementCounts(
       status?.stats?.favourite_count,
       status?.stats?.favorite_count,
     ),
+    bookmarkCount: readMetricCount(
+      status?.bookmarks,
+      status?.bookmark_count,
+      status?.bookmarkCount,
+      status?.engagement?.bookmarks,
+      status?.engagement?.bookmark_count,
+      status?.engagement?.bookmarkCount,
+      status?.stats?.bookmarks,
+      status?.stats?.bookmark_count,
+      status?.stats?.bookmarkCount,
+    ),
   };
+}
+
+function readDisplayedRepostCount(
+  status: RichTweetStatus | undefined,
+): number | null {
+  const repostCount = readMetricCount(
+    status?.reposts,
+    status?.repost_count,
+    status?.retweets,
+    status?.retweet_count,
+    status?.engagement?.reposts,
+    status?.engagement?.repost_count,
+    status?.engagement?.retweets,
+    status?.engagement?.retweet_count,
+    status?.stats?.reposts,
+    status?.stats?.repost_count,
+    status?.stats?.retweets,
+    status?.stats?.retweet_count,
+  );
+  const quoteCount = readMetricCount(
+    status?.quotes,
+    status?.quote_count,
+    status?.quoteCount,
+    status?.engagement?.quotes,
+    status?.engagement?.quote_count,
+    status?.engagement?.quoteCount,
+    status?.stats?.quotes,
+    status?.stats?.quote_count,
+    status?.stats?.quoteCount,
+  );
+
+  if (repostCount === null && quoteCount === null) {
+    return null;
+  }
+
+  return (repostCount ?? 0) + (quoteCount ?? 0);
 }
 
 function readMetricCount(
@@ -525,7 +625,7 @@ function extractEmbeddedTweet(
     handle: status.author?.screen_name?.trim() ?? "",
     body,
     bodyHtml: "",
-    timestampLabel: collapseWhitespace(status.created_at ?? ""),
+    timestampLabel: formatTimestampLabel(status.created_at ?? ""),
     avatarUrl: normalizeAssetUrl(status.author?.avatar_url ?? ""),
     mediaUrl,
     mediaUrls,
