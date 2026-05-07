@@ -32,6 +32,26 @@ describe("TweetCard", () => {
     expect(screen.queryByText("Source attached")).not.toBeInTheDocument();
   });
 
+  it("keeps the footer attribution accessible when the visible label is compacted", () => {
+    const { container } = render(
+      <TweetCard
+        draft={createEmptyDraft({
+          authorName: "SpaceX",
+          handle: "SpaceX",
+          body: "Footer sizing check.",
+          timestampLabel: "April 23, 2026",
+        })}
+      />,
+    );
+
+    expect(screen.getByLabelText("Made with xshots.domc.me")).toHaveClass(
+      "tweet-card__credit",
+    );
+    expect(
+      container.querySelector(".tweet-card__credit-label"),
+    ).toHaveAttribute("aria-hidden", "true");
+  });
+
   it("renders an uploaded media image when present", () => {
     render(
       <TweetCard

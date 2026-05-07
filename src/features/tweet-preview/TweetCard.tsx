@@ -78,9 +78,11 @@ export function TweetCard({ draft }: TweetCardProps) {
         </span>
         <span
           className="tweet-card__credit"
-          aria-label="Share card site attribution"
+          aria-label={`Made with ${siteUrl}`}
         >
-          <span className="tweet-card__credit-label">Made with</span>
+          <span className="tweet-card__credit-label" aria-hidden="true">
+            Made with
+          </span>
           <span className="tweet-card__credit-url">{siteUrl}</span>
         </span>
       </footer>

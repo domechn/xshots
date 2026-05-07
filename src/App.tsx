@@ -19,6 +19,14 @@ type StatusState = {
   message: string;
 };
 
+type AdsByGoogleQueue = Array<Record<string, never>>;
+
+declare global {
+  interface Window {
+    adsbygoogle?: AdsByGoogleQueue;
+  }
+}
+
 const INITIAL_DRAFT = createEmptyDraft({
   authorName: "Preview",
   handle: "xshots",
@@ -41,6 +49,10 @@ export default function App({
   const [isImporting, setIsImporting] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const [isCopying, setIsCopying] = useState(false);
+
+  useEffect(() => {
+    queueAdsenseAd();
+  }, []);
 
   useEffect(() => {
     if (!status) {
@@ -252,20 +264,20 @@ export default function App({
                 </span>
               </label>
             </form>
-            <div className="ad-slot ad-slot--tweet-link">
-              <ins
-                className="adsbygoogle"
-                style={{ display: "block" }}
-                data-ad-client="ca-pub-7409362530062378"
-                data-ad-slot="3630870817"
-                data-ad-format="auto"
-                data-full-width-responsive="true"
-              ></ins>
-              <script>
-                (adsbygoogle = window.adsbygoogle || []).push({});
-              </script>
-            </div>
           </section>
+          <div
+            className="ad-slot ad-slot--tweet-link ad-slot--between-panels"
+            aria-label="Advertisement"
+          >
+            <ins
+              className="adsbygoogle"
+              style={{ display: "block" }}
+              data-ad-client="ca-pub-7409362530062378"
+              data-ad-slot="3630870817"
+              data-ad-format="auto"
+              data-full-width-responsive="true"
+            ></ins>
+          </div>
 
           <section className="preview-panel preview-panel--minimal">
             <div className="preview-panel__header preview-panel__header--minimal">
@@ -341,4 +353,17 @@ async function copyPngToClipboard(dataUrl: string) {
       [blob.type || "image/png"]: blob,
     }),
   ]);
+}
+
+function queueAdsenseAd() {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  try {
+    const adsbygoogle = window.adsbygoogle ?? (window.adsbygoogle = []);
+    adsbygoogle.push({});
+  } catch {
+    return;
+  }
 }

@@ -5,6 +5,7 @@ import App from "./App";
 
 afterEach(() => {
   vi.useRealTimers();
+  delete window.adsbygoogle;
 });
 
 describe("App", () => {
@@ -42,25 +43,43 @@ describe("App", () => {
     ).not.toBeInTheDocument();
   });
 
-  it("places the ad below the tweet link block and keeps the footer ad-free", () => {
+  it("places the ad as a standalone band between the tweet link and preview", () => {
     const { container } = render(<App />);
 
+    const appGrid = container.querySelector<HTMLElement>(".app-grid");
     const controlPanel = container.querySelector<HTMLElement>(".control-panel");
-    const importShell = container.querySelector<HTMLElement>(".import-shell");
-    const adSlot = container.querySelector<HTMLElement>(
-      ".control-panel .ad-slot",
-    );
+    const adSlot = screen.getByLabelText("Advertisement");
+    const previewPanel = container.querySelector<HTMLElement>(".preview-panel");
     const footerAdSlot = container.querySelector<HTMLElement>(
       ".app-footer .ad-slot",
     );
-    const controlPanelChildren = Array.from(controlPanel?.children ?? []);
+    const gridChildren = Array.from(appGrid?.children ?? []);
 
-    expect(controlPanel).toContainElement(importShell);
-    expect(controlPanel).toContainElement(adSlot);
+    expect(appGrid).toContainElement(controlPanel);
+    expect(appGrid).toContainElement(adSlot);
+    expect(appGrid).toContainElement(previewPanel);
+    expect(controlPanel).not.toContainElement(adSlot);
     expect(footerAdSlot).not.toBeInTheDocument();
-    expect(controlPanelChildren.indexOf(importShell!)).toBeLessThan(
-      controlPanelChildren.indexOf(adSlot!),
+    expect(adSlot).toHaveClass("ad-slot--between-panels");
+    expect(adSlot.querySelector(".adsbygoogle")).toHaveAttribute(
+      "data-full-width-responsive",
+      "true",
     );
+    expect(gridChildren.indexOf(controlPanel!)).toBeLessThan(
+      gridChildren.indexOf(adSlot),
+    );
+    expect(gridChildren.indexOf(adSlot)).toBeLessThan(
+      gridChildren.indexOf(previewPanel!),
+    );
+  });
+
+  it("queues the AdSense slot after render", () => {
+    const adQueue: Array<Record<string, never>> = [];
+    window.adsbygoogle = adQueue;
+
+    render(<App />);
+
+    expect(adQueue).toEqual([{}]);
   });
 
   it("imports a tweet URL and updates the preview", async () => {
