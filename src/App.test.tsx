@@ -6,6 +6,7 @@ import App from "./App";
 afterEach(() => {
   vi.useRealTimers();
   delete window.adsbygoogle;
+  delete window.__xshotsQueuedAdCount;
 });
 
 describe("App", () => {
@@ -43,34 +44,30 @@ describe("App", () => {
     ).not.toBeInTheDocument();
   });
 
-  it("places the ad as a standalone band between the tweet link and preview", () => {
+  it("renders dual side-rail ads outside the main content grid", () => {
     const { container } = render(<App />);
 
     const appGrid = container.querySelector<HTMLElement>(".app-grid");
-    const controlPanel = container.querySelector<HTMLElement>(".control-panel");
-    const adSlot = screen.getByLabelText("Advertisement");
-    const previewPanel = container.querySelector<HTMLElement>(".preview-panel");
+    const adSlots = screen.getAllByLabelText("Advertisement");
     const footerAdSlot = container.querySelector<HTMLElement>(
       ".app-footer .ad-slot",
     );
-    const gridChildren = Array.from(appGrid?.children ?? []);
+    const inlineGridAd = appGrid?.querySelector<HTMLElement>(".ad-slot");
 
-    expect(appGrid).toContainElement(controlPanel);
-    expect(appGrid).toContainElement(adSlot);
-    expect(appGrid).toContainElement(previewPanel);
-    expect(controlPanel).not.toContainElement(adSlot);
+    expect(adSlots).toHaveLength(2);
+    expect(inlineGridAd).toBeNull();
     expect(footerAdSlot).not.toBeInTheDocument();
-    expect(adSlot).toHaveClass("ad-slot--between-panels");
-    expect(adSlot).toHaveClass("ad-slot--compact");
-    expect(adSlot.querySelector(".adsbygoogle")).toHaveAttribute(
+    expect(adSlots[0]).toHaveClass("ad-slot--side-rail");
+    expect(adSlots[0]).toHaveClass("ad-slot--side-rail-left");
+    expect(adSlots[1]).toHaveClass("ad-slot--side-rail");
+    expect(adSlots[1]).toHaveClass("ad-slot--side-rail-right");
+    expect(adSlots[0].querySelector(".adsbygoogle")).toHaveAttribute(
       "data-full-width-responsive",
       "true",
     );
-    expect(gridChildren.indexOf(controlPanel!)).toBeLessThan(
-      gridChildren.indexOf(adSlot),
-    );
-    expect(gridChildren.indexOf(adSlot)).toBeLessThan(
-      gridChildren.indexOf(previewPanel!),
+    expect(adSlots[1].querySelector(".adsbygoogle")).toHaveAttribute(
+      "data-full-width-responsive",
+      "true",
     );
   });
 
@@ -80,7 +77,7 @@ describe("App", () => {
 
     render(<App />);
 
-    expect(adQueue).toEqual([{}]);
+    expect(adQueue).toEqual([{}, {}]);
   });
 
   it("imports a tweet URL and updates the preview", async () => {

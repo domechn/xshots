@@ -20,10 +20,12 @@ type StatusState = {
 };
 
 type AdsByGoogleQueue = Array<Record<string, never>>;
+const SIDE_AD_SLOT_COUNT = 2;
 
 declare global {
   interface Window {
     adsbygoogle?: AdsByGoogleQueue;
+    __xshotsQueuedAdCount?: number;
   }
 }
 
@@ -51,7 +53,7 @@ export default function App({
   const [isCopying, setIsCopying] = useState(false);
 
   useEffect(() => {
-    queueAdsenseAd();
+    queueAdsenseAds(SIDE_AD_SLOT_COUNT);
   }, []);
 
   useEffect(() => {
@@ -222,104 +224,110 @@ export default function App({
           </div>
         </div>
       ) : null}
-      <div className="app-shell__inner">
-        <section className="app-hero app-hero--minimal">
-          <h1 className="app-hero__title app-hero__title--minimal">
-            Paste a tweet URL. Get a clean share image.
-          </h1>
-          <p className="app-hero__summary app-hero__summary--minimal">
-            Enter an X or Twitter post URL to preview and export it.
-          </p>
-        </section>
+      <div className="app-layout app-layout--minimal">
+        <AdSlot className="ad-slot ad-slot--side-rail ad-slot--side-rail-left" />
+        <div className="app-shell__inner">
+          <section className="app-hero app-hero--minimal">
+            <h1 className="app-hero__title app-hero__title--minimal">
+              Paste a tweet URL. Get a clean share image.
+            </h1>
+            <p className="app-hero__summary app-hero__summary--minimal">
+              Enter an X or Twitter post URL to preview and export it.
+            </p>
+          </section>
 
-        <section className="app-grid app-grid--minimal">
-          <section className="control-panel control-panel--minimal">
-            <form
-              className="import-shell"
-              onSubmit={(event) => {
-                event.preventDefault();
-                void handleImport();
-              }}
-            >
-              <label className="field">
-                <span className="field__label">Tweet link</span>
-                <div className="import-shell__row">
-                  <input
-                    aria-label="Tweet link"
-                    className="field__input"
-                    placeholder="https://x.com/user/status/..."
-                    value={tweetUrl}
-                    onChange={(event) => setTweetUrl(event.target.value)}
-                  />
+          <section className="app-grid app-grid--minimal">
+            <section className="control-panel control-panel--minimal">
+              <form
+                className="import-shell"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  void handleImport();
+                }}
+              >
+                <label className="field">
+                  <span className="field__label">Tweet link</span>
+                  <div className="import-shell__row">
+                    <input
+                      aria-label="Tweet link"
+                      className="field__input"
+                      placeholder="https://x.com/user/status/..."
+                      value={tweetUrl}
+                      onChange={(event) => setTweetUrl(event.target.value)}
+                    />
+                    <button
+                      className="button button--compact"
+                      type="submit"
+                      disabled={isImporting}
+                    >
+                      {isImporting ? "Importing…" : "Import tweet"}
+                    </button>
+                  </div>
+                  <span className="field__hint">
+                    Paste a full X or Twitter status link.
+                  </span>
+                </label>
+              </form>
+            </section>
+
+            <section className="preview-panel preview-panel--minimal">
+              <div className="preview-panel__header preview-panel__header--minimal">
+                <h2 className="preview-panel__title">Preview stage</h2>
+                <div className="preview-panel__toolbar">
+                  <button
+                    className="button--ghost button--compact"
+                    type="button"
+                    onClick={handleCopyToClipboard}
+                    disabled={isOutputDisabled}
+                  >
+                    {isCopying ? "Copying…" : "Copy to clipboard"}
+                  </button>
                   <button
                     className="button button--compact"
-                    type="submit"
-                    disabled={isImporting}
+                    type="button"
+                    onClick={handleExport}
+                    disabled={isOutputDisabled}
                   >
-                    {isImporting ? "Importing…" : "Import tweet"}
+                    {isExporting ? "Rendering…" : "Export PNG"}
                   </button>
                 </div>
-                <span className="field__hint">
-                  Paste a full X or Twitter status link.
-                </span>
-              </label>
-            </form>
-          </section>
-          <div
-            className="ad-slot ad-slot--tweet-link ad-slot--between-panels ad-slot--compact"
-            aria-label="Advertisement"
-          >
-            <ins
-              className="adsbygoogle"
-              style={{ display: "block" }}
-              data-ad-client="ca-pub-7409362530062378"
-              data-ad-slot="3630870817"
-              data-ad-format="auto"
-              data-full-width-responsive="true"
-            ></ins>
-          </div>
-
-          <section className="preview-panel preview-panel--minimal">
-            <div className="preview-panel__header preview-panel__header--minimal">
-              <h2 className="preview-panel__title">Preview stage</h2>
-              <div className="preview-panel__toolbar">
-                <button
-                  className="button--ghost button--compact"
-                  type="button"
-                  onClick={handleCopyToClipboard}
-                  disabled={isOutputDisabled}
-                >
-                  {isCopying ? "Copying…" : "Copy to clipboard"}
-                </button>
-                <button
-                  className="button button--compact"
-                  type="button"
-                  onClick={handleExport}
-                  disabled={isOutputDisabled}
-                >
-                  {isExporting ? "Rendering…" : "Export PNG"}
-                </button>
               </div>
-            </div>
 
-            <div className="preview-stage preview-stage--minimal">
-              <div className="preview-stage__capture" ref={previewRef}>
-                <TweetCard draft={draft} />
+              <div className="preview-stage preview-stage--minimal">
+                <div className="preview-stage__capture" ref={previewRef}>
+                  <TweetCard draft={draft} />
+                </div>
               </div>
-            </div>
+            </section>
           </section>
-        </section>
-        <footer className="app-footer">
-          <p className="privacy-note">
-            This site uses Google AdSense, which may use cookies to serve
-            personalized ads.
-            <a href="/privacy.html" className="app-link">
-              Privacy Policy
-            </a>
-          </p>
-        </footer>
+          <footer className="app-footer">
+            <p className="privacy-note">
+              This site uses Google AdSense, which may use cookies to serve
+              personalized ads.
+              <a href="/privacy.html" className="app-link">
+                Privacy Policy
+              </a>
+            </p>
+          </footer>
+        </div>
+        <AdSlot className="ad-slot ad-slot--side-rail ad-slot--side-rail-right" />
       </div>
     </main>
+  );
+}
+
+function AdSlot({ className }: { className: string }) {
+  return (
+    <aside className={className} aria-label="Advertisement">
+      <ins
+        className="adsbygoogle"
+        style={{ display: "block" }}
+        data-ad-client="ca-pub-7409362530062378"
+        data-ad-slot="5831776750"
+        data-ad-format="auto"
+        data-full-width-responsive="true"
+      ></ins>
+    </aside>
   );
 }
 
@@ -355,14 +363,20 @@ async function copyPngToClipboard(dataUrl: string) {
   ]);
 }
 
-function queueAdsenseAd() {
+function queueAdsenseAds(slotCount: number) {
   if (typeof window === "undefined") {
     return;
   }
 
   try {
     const adsbygoogle = window.adsbygoogle ?? (window.adsbygoogle = []);
-    adsbygoogle.push({});
+    const queuedAdCount = window.__xshotsQueuedAdCount ?? 0;
+
+    for (let index = queuedAdCount; index < slotCount; index += 1) {
+      adsbygoogle.push({});
+    }
+
+    window.__xshotsQueuedAdCount = Math.max(queuedAdCount, slotCount);
   } catch {
     return;
   }
