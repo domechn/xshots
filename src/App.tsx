@@ -20,6 +20,7 @@ type StatusState = {
 };
 
 type AdsByGoogleQueue = Array<Record<string, never>>;
+const DESKTOP_AD_MEDIA_QUERY = "(min-width: 1280px)";
 const SIDE_AD_SLOT_COUNT = 2;
 
 declare global {
@@ -44,6 +45,7 @@ export default function App({
   clipboardWriter = copyPngToClipboard,
 }: AppProps) {
   const previewRef = useRef<HTMLDivElement>(null);
+  const isDesktopAdLayout = useDesktopAdLayout();
   const [tweetUrl, setTweetUrl] = useState("");
   const [draft, setDraft] = useState(INITIAL_DRAFT);
   const [status, setStatus] = useState<StatusState | null>(null);
@@ -51,10 +53,11 @@ export default function App({
   const [isImporting, setIsImporting] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const [isCopying, setIsCopying] = useState(false);
+  const activeAdSlotCount = isDesktopAdLayout ? SIDE_AD_SLOT_COUNT : 1;
 
   useEffect(() => {
-    queueAdsenseAds(SIDE_AD_SLOT_COUNT);
-  }, []);
+    queueAdsenseAds(activeAdSlotCount);
+  }, [activeAdSlotCount]);
 
   useEffect(() => {
     if (!status) {
@@ -225,7 +228,9 @@ export default function App({
         </div>
       ) : null}
       <div className="app-layout app-layout--minimal">
-        <AdSlot className="ad-slot ad-slot--side-rail ad-slot--side-rail-left" />
+        {isDesktopAdLayout ? (
+          <AdSlot className="ad-slot ad-slot--side-rail ad-slot--side-rail-left" />
+        ) : null}
         <div className="app-shell__inner">
           <section className="app-hero app-hero--minimal">
             <h1 className="app-hero__title app-hero__title--minimal">
@@ -300,6 +305,9 @@ export default function App({
               </div>
             </section>
           </section>
+          {!isDesktopAdLayout ? (
+            <AdSlot className="ad-slot ad-slot--mobile-fallback" />
+          ) : null}
           <footer className="app-footer">
             <p className="privacy-note">
               This site uses Google AdSense, which may use cookies to serve
@@ -310,7 +318,9 @@ export default function App({
             </p>
           </footer>
         </div>
-        <AdSlot className="ad-slot ad-slot--side-rail ad-slot--side-rail-right" />
+        {isDesktopAdLayout ? (
+          <AdSlot className="ad-slot ad-slot--side-rail ad-slot--side-rail-right" />
+        ) : null}
       </div>
     </main>
   );
@@ -380,4 +390,43 @@ function queueAdsenseAds(slotCount: number) {
   } catch {
     return;
   }
+}
+
+function useDesktopAdLayout() {
+  const [isDesktopAdLayout, setIsDesktopAdLayout] = useState(() => {
+    if (typeof window === "undefined" || !window.matchMedia) {
+      return false;
+    }
+
+    return window.matchMedia(DESKTOP_AD_MEDIA_QUERY).matches;
+  });
+
+  useEffect(() => {
+    if (typeof window === "undefined" || !window.matchMedia) {
+      return;
+    }
+
+    const mediaQuery = window.matchMedia(DESKTOP_AD_MEDIA_QUERY);
+    const updateLayout = (event?: MediaQueryListEvent) => {
+      setIsDesktopAdLayout(event ? event.matches : mediaQuery.matches);
+    };
+
+    updateLayout();
+
+    if (typeof mediaQuery.addEventListener === "function") {
+      mediaQuery.addEventListener("change", updateLayout);
+
+      return () => {
+        mediaQuery.removeEventListener("change", updateLayout);
+      };
+    }
+
+    mediaQuery.addListener(updateLayout);
+
+    return () => {
+      mediaQuery.removeListener(updateLayout);
+    };
+  }, []);
+
+  return isDesktopAdLayout;
 }
