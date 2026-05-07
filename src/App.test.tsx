@@ -61,6 +61,7 @@ describe("App", () => {
     expect(controlPanel).not.toContainElement(adSlot);
     expect(footerAdSlot).not.toBeInTheDocument();
     expect(adSlot).toHaveClass("ad-slot--between-panels");
+    expect(adSlot).toHaveClass("ad-slot--compact");
     expect(adSlot.querySelector(".adsbygoogle")).toHaveAttribute(
       "data-full-width-responsive",
       "true",

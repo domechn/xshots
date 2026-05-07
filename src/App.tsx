@@ -266,7 +266,7 @@ export default function App({
             </form>
           </section>
           <div
-            className="ad-slot ad-slot--tweet-link ad-slot--between-panels"
+            className="ad-slot ad-slot--tweet-link ad-slot--between-panels ad-slot--compact"
             aria-label="Advertisement"
           >
             <ins

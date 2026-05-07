@@ -932,25 +932,31 @@
 }
 
 .ad-slot--tweet-link {
-  min-height: 5.75rem;
   margin-block: calc(var(--space-2) * -1);
   padding-block: 0.25rem;
   border-block: 1px solid rgba(243, 241, 235, 0.08);
 }
 
-.ad-slot--tweet-link ins {
-  min-height: 5.25rem;
+.ad-slot--compact {
+  min-height: 4rem;
+}
+
+.ad-slot--compact ins {
+  min-height: 3.75rem;
 }
 
 @media (max-width: 720px) {
   .ad-slot--tweet-link {
-    min-height: 4.5rem;
     margin-block: calc(var(--space-2) * -1);
     padding-block: 0;
   }
 
-  .ad-slot--tweet-link ins {
-    min-height: 4.5rem;
+  .ad-slot--compact {
+    min-height: 3.25rem;
+  }
+
+  .ad-slot--compact ins {
+    min-height: 3.25rem;
   }
 }
 
