@@ -42,6 +42,27 @@ describe("App", () => {
     ).not.toBeInTheDocument();
   });
 
+  it("places the ad below the tweet link block and keeps the footer ad-free", () => {
+    const { container } = render(<App />);
+
+    const controlPanel = container.querySelector<HTMLElement>(".control-panel");
+    const importShell = container.querySelector<HTMLElement>(".import-shell");
+    const adSlot = container.querySelector<HTMLElement>(
+      ".control-panel .ad-slot",
+    );
+    const footerAdSlot = container.querySelector<HTMLElement>(
+      ".app-footer .ad-slot",
+    );
+    const controlPanelChildren = Array.from(controlPanel?.children ?? []);
+
+    expect(controlPanel).toContainElement(importShell);
+    expect(controlPanel).toContainElement(adSlot);
+    expect(footerAdSlot).not.toBeInTheDocument();
+    expect(controlPanelChildren.indexOf(importShell!)).toBeLessThan(
+      controlPanelChildren.indexOf(adSlot!),
+    );
+  });
+
   it("imports a tweet URL and updates the preview", async () => {
     const user = userEvent.setup();
     const importer = vi.fn().mockResolvedValue({

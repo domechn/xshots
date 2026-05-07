@@ -218,15 +218,6 @@ export default function App({
           <p className="app-hero__summary app-hero__summary--minimal">
             Enter an X or Twitter post URL to preview and export it.
           </p>
-          <div className="ad-slot ad-slot--top">
-            <ins className="adsbygoogle"
-                 style={{ display: "block" }}
-                 data-ad-client="ca-pub-7409362530062378"
-                 data-ad-slot="3630870817"
-                 data-ad-format="auto"
-                 data-full-width-responsive="true"></ins>
-            <script>(adsbygoogle = window.adsbygoogle || []).push({});</script>
-          </div>
         </section>
 
         <section className="app-grid app-grid--minimal">
@@ -261,6 +252,19 @@ export default function App({
                 </span>
               </label>
             </form>
+            <div className="ad-slot ad-slot--tweet-link">
+              <ins
+                className="adsbygoogle"
+                style={{ display: "block" }}
+                data-ad-client="ca-pub-7409362530062378"
+                data-ad-slot="3630870817"
+                data-ad-format="auto"
+                data-full-width-responsive="true"
+              ></ins>
+              <script>
+                (adsbygoogle = window.adsbygoogle || []).push({});
+              </script>
+            </div>
           </section>
 
           <section className="preview-panel preview-panel--minimal">
@@ -294,18 +298,12 @@ export default function App({
           </section>
         </section>
         <footer className="app-footer">
-          <div className="ad-slot ad-slot--bottom">
-            <ins className="adsbygoogle"
-                 style={{ display: "block" }}
-                 data-ad-client="ca-pub-7409362530062378"
-                 data-ad-slot="3630870817"
-                 data-ad-format="auto"
-                 data-full-width-responsive="true"></ins>
-            <script>(adsbygoogle = window.adsbygoogle || []).push({});</script>
-          </div>
           <p className="privacy-note">
-            This site uses Google AdSense, which may use cookies to serve personalized ads.
-            <a href="/privacy.html" className="app-link">Privacy Policy</a>
+            This site uses Google AdSense, which may use cookies to serve
+            personalized ads.
+            <a href="/privacy.html" className="app-link">
+              Privacy Policy
+            </a>
           </p>
         </footer>
       </div>

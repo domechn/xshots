@@ -885,14 +885,13 @@
   width: 100%;
 }
 
-.ad-slot--top {
-  min-height: 90px;
-  margin-top: 8px;
+.control-panel .ad-slot {
+  position: relative;
+  z-index: 1;
 }
 
-.ad-slot--bottom {
+.ad-slot--tweet-link {
   min-height: 90px;
-  margin-bottom: 14px;
 }
 
 /* Footer */
@@ -929,7 +928,10 @@
   font-size: 0.82rem;
   font-weight: 600;
   text-decoration: none;
-  transition: transform 160ms ease, background-color 160ms ease, box-shadow 160ms ease;
+  transition:
+    transform 160ms ease,
+    background-color 160ms ease,
+    box-shadow 160ms ease;
   white-space: nowrap;
 }
 
