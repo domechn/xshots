@@ -331,7 +331,7 @@ export default function App({
           <footer className="app-footer">
             <p className="privacy-note">
               Copy and export open a sponsor link in a new tab. No account
-              required.
+              required.{" "}
               <a href="/privacy.html" className="app-link">
                 Privacy Policy
               </a>

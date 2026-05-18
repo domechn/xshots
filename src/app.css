@@ -59,10 +59,17 @@
 
 .app-shell--minimal .app-shell__inner {
   width: min(100%, 720px);
+  min-height: calc(100vh - (var(--page-padding) * 2));
+  display: flex;
+  flex-direction: column;
 }
 
 .app-layout {
   width: 100%;
+}
+
+.app-layout--minimal {
+  flex: 1 0 auto;
 }
 
 .app-hero {
@@ -459,8 +466,9 @@
 
 .preview-panel__copy--actions {
   margin: 0;
-  max-width: 22rem;
+  max-width: none;
   text-align: right;
+  white-space: nowrap;
 }
 
 .preview-stage {
@@ -880,6 +888,7 @@
   .preview-panel__copy--actions {
     max-width: none;
     text-align: left;
+    white-space: normal;
   }
 
   .button--compact {
