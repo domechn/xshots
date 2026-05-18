@@ -296,8 +296,7 @@ export default function App({
                 <div>
                   <h2 className="preview-panel__title">Preview stage</h2>
                   <p className="preview-panel__copy">
-                    The first Copy or Export click opens a sponsor tab. Return
-                    here and repeat the action to finish.
+                    First click opens sponsor tab. Click again to finish.
                   </p>
                 </div>
                 <div className="preview-panel__toolbar">
