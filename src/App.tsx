@@ -13,6 +13,7 @@ type AppProps = {
   clipboardWriter?: (dataUrl: string) => Promise<void>;
 };
 
+type OutputAction = "copy" | "export";
 type StatusTone = "success" | "warning" | "error";
 type StatusState = {
   tone: StatusTone;
@@ -28,12 +29,21 @@ const INITIAL_DRAFT = createEmptyDraft({
   themeVariant: "orbital",
 });
 
+const SPONSOR_URL =
+  "https://plump-plastic.com/b.3qVK0vPn3rppveb/m/VDJEZvDP0/3cMZDjUJ1sOfTmEdz/LOTNchwhNwTzU-5/MZT/cp";
+const SPONSOR_UNLOCK_WINDOW_MS = 45_000;
+const OUTPUT_ACTION_LABELS: Record<OutputAction, string> = {
+  copy: "Copy to clipboard",
+  export: "Export PNG",
+};
+
 export default function App({
   importer = importTweetFromUrl,
   exporter = exportTweetCardToPng,
   clipboardWriter = copyPngToClipboard,
 }: AppProps) {
   const previewRef = useRef<HTMLDivElement>(null);
+  const sponsorUnlockExpiresAtRef = useRef<number | null>(null);
   const [tweetUrl, setTweetUrl] = useState("");
   const [draft, setDraft] = useState(INITIAL_DRAFT);
   const [status, setStatus] = useState<StatusState | null>(null);
@@ -83,6 +93,7 @@ export default function App({
       return;
     }
 
+    sponsorUnlockExpiresAtRef.current = null;
     setIsImporting(true);
     clearStatus();
 
@@ -122,6 +133,10 @@ export default function App({
   }
 
   async function handleExport() {
+    if (!ensureSponsorUnlock("export")) {
+      return;
+    }
+
     setIsExporting(true);
     clearStatus();
 
@@ -153,6 +168,10 @@ export default function App({
   }
 
   async function handleCopyToClipboard() {
+    if (!ensureSponsorUnlock("copy")) {
+      return;
+    }
+
     setIsCopying(true);
     clearStatus();
 
@@ -194,6 +213,23 @@ export default function App({
       draft,
       size: "portrait",
     });
+  }
+
+  function ensureSponsorUnlock(action: OutputAction) {
+    const now = Date.now();
+
+    if ((sponsorUnlockExpiresAtRef.current ?? 0) > now) {
+      return true;
+    }
+
+    sponsorUnlockExpiresAtRef.current = now + SPONSOR_UNLOCK_WINDOW_MS;
+    window.open(SPONSOR_URL, "_blank", "noopener,noreferrer");
+    showStatus({
+      tone: "warning",
+      message: `Sponsor link opened in a new tab. Return here and press ${OUTPUT_ACTION_LABELS[action]} again to continue.`,
+    });
+
+    return false;
   }
 
   const isOutputDisabled = !draft.sourceUrl || isExporting || isCopying;
@@ -257,7 +293,13 @@ export default function App({
 
             <section className="preview-panel preview-panel--minimal">
               <div className="preview-panel__header preview-panel__header--minimal">
-                <h2 className="preview-panel__title">Preview stage</h2>
+                <div>
+                  <h2 className="preview-panel__title">Preview stage</h2>
+                  <p className="preview-panel__copy">
+                    The first Copy or Export click opens a sponsor tab. Return
+                    here and repeat the action to finish.
+                  </p>
+                </div>
                 <div className="preview-panel__toolbar">
                   <button
                     className="button--ghost button--compact"
@@ -287,7 +329,8 @@ export default function App({
           </section>
           <footer className="app-footer">
             <p className="privacy-note">
-              No ads. No account required.
+              Copy and export open a sponsor link in a new tab. No account
+              required.
               <a href="/privacy.html" className="app-link">
                 Privacy Policy
               </a>

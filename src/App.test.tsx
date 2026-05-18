@@ -5,6 +5,7 @@ import App from "./App";
 
 afterEach(() => {
   vi.useRealTimers();
+  vi.restoreAllMocks();
 });
 
 describe("App", () => {
@@ -42,11 +43,15 @@ describe("App", () => {
     ).not.toBeInTheDocument();
   });
 
-  it("renders the app without advertisement slots", () => {
+  it("renders sponsor disclosure without inline advertisement slots", () => {
     render(<App />);
 
     expect(screen.queryByLabelText("Advertisement")).not.toBeInTheDocument();
-    expect(screen.getByText("No ads. No account required.")).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Copy and export open a sponsor link in a new tab. No account required.",
+      ),
+    ).toBeInTheDocument();
   });
 
   it("imports a tweet URL and updates the preview", async () => {
@@ -147,7 +152,7 @@ describe("App", () => {
     expect(screen.getByText(/fill in the tweet manually/i)).toBeInTheDocument();
   });
 
-  it("copies the rendered png to the clipboard", async () => {
+  it("opens a sponsor tab before allowing clipboard copy", async () => {
     const user = userEvent.setup();
     const importer = vi.fn().mockResolvedValue({
       status: "success",
@@ -168,6 +173,7 @@ describe("App", () => {
       dataUrl: "data:image/png;base64,Zm9v",
     });
     const clipboardWriter = vi.fn().mockResolvedValue(undefined);
+    const openSpy = vi.spyOn(window, "open").mockReturnValue(null);
 
     render(
       <App
@@ -184,9 +190,67 @@ describe("App", () => {
     await user.click(screen.getByRole("button", { name: "Import tweet" }));
     await user.click(screen.getByRole("button", { name: "Copy to clipboard" }));
 
-    expect(exporter).toHaveBeenCalled();
+    expect(openSpy).toHaveBeenCalledWith(
+      "https://plump-plastic.com/b.3qVK0vPn3rppveb/m/VDJEZvDP0/3cMZDjUJ1sOfTmEdz/LOTNchwhNwTzU-5/MZT/cp",
+      "_blank",
+      "noopener,noreferrer",
+    );
+    expect(exporter).not.toHaveBeenCalled();
+    expect(clipboardWriter).not.toHaveBeenCalled();
+    expect(screen.getByRole("status")).toHaveTextContent(
+      "Sponsor link opened in a new tab. Return here and press Copy to clipboard again to continue.",
+    );
+
+    await user.click(screen.getByRole("button", { name: "Copy to clipboard" }));
+
+    expect(exporter).toHaveBeenCalledTimes(1);
     expect(clipboardWriter).toHaveBeenCalledWith("data:image/png;base64,Zm9v");
-    expect(screen.getByText(/copied to the clipboard/i)).toBeInTheDocument();
+  });
+
+  it("opens a sponsor tab before allowing PNG export", async () => {
+    const user = userEvent.setup();
+    const importer = vi.fn().mockResolvedValue({
+      status: "success",
+      draft: {
+        sourceUrl: "https://x.com/SpaceX/status/1915324363727337943",
+        authorName: "SpaceX",
+        handle: "SpaceX",
+        body: "Export ready.",
+        timestampLabel: "April 23, 2026",
+        avatarUrl: "",
+        mediaUrl: "",
+        verified: true,
+        themeVariant: "orbital",
+      },
+    });
+    const exporter = vi.fn().mockResolvedValue({
+      status: "success",
+      dataUrl: "data:image/png;base64,Zm9v",
+    });
+    const openSpy = vi.spyOn(window, "open").mockReturnValue(null);
+
+    render(<App importer={importer} exporter={exporter} />);
+
+    await user.type(
+      screen.getByLabelText("Tweet link"),
+      "https://x.com/SpaceX/status/1915324363727337943",
+    );
+    await user.click(screen.getByRole("button", { name: "Import tweet" }));
+    await user.click(screen.getByRole("button", { name: "Export PNG" }));
+
+    expect(openSpy).toHaveBeenCalledWith(
+      "https://plump-plastic.com/b.3qVK0vPn3rppveb/m/VDJEZvDP0/3cMZDjUJ1sOfTmEdz/LOTNchwhNwTzU-5/MZT/cp",
+      "_blank",
+      "noopener,noreferrer",
+    );
+    expect(exporter).not.toHaveBeenCalled();
+    expect(screen.getByRole("status")).toHaveTextContent(
+      "Sponsor link opened in a new tab. Return here and press Export PNG again to continue.",
+    );
+
+    await user.click(screen.getByRole("button", { name: "Export PNG" }));
+
+    expect(exporter).toHaveBeenCalledTimes(1);
   });
 
   it("auto dismisses toast messages after a few seconds", async () => {
