@@ -3,29 +3,8 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import App from "./App";
 
-const DESKTOP_AD_MEDIA_QUERY = "(min-width: 1280px)";
-const originalMatchMedia = window.matchMedia;
-
-function mockViewportMode(mode: "desktop" | "mobile") {
-  const matchesDesktop = mode === "desktop";
-
-  window.matchMedia = vi.fn().mockImplementation((query: string) => ({
-    matches: query === DESKTOP_AD_MEDIA_QUERY ? matchesDesktop : false,
-    media: query,
-    onchange: null,
-    addListener: vi.fn(),
-    removeListener: vi.fn(),
-    addEventListener: vi.fn(),
-    removeEventListener: vi.fn(),
-    dispatchEvent: vi.fn(),
-  }));
-}
-
 afterEach(() => {
   vi.useRealTimers();
-  delete window.adsbygoogle;
-  delete window.__xshotsQueuedAdCount;
-  window.matchMedia = originalMatchMedia;
 });
 
 describe("App", () => {
@@ -63,83 +42,11 @@ describe("App", () => {
     ).not.toBeInTheDocument();
   });
 
-  it("renders fixed side-rail ads outside the main content grid on desktop", () => {
-    mockViewportMode("desktop");
-
-    const { container } = render(<App />);
-
-    const appGrid = container.querySelector<HTMLElement>(".app-grid");
-    const adSlots = screen.getAllByLabelText("Advertisement");
-    const footerAdSlot = container.querySelector<HTMLElement>(
-      ".app-footer .ad-slot",
-    );
-    const inlineGridAd = appGrid?.querySelector<HTMLElement>(".ad-slot");
-    const mobileFallbackAd = container.querySelector<HTMLElement>(
-      ".ad-slot--mobile-fallback",
-    );
-
-    expect(adSlots).toHaveLength(2);
-    expect(inlineGridAd).toBeNull();
-    expect(footerAdSlot).not.toBeInTheDocument();
-    expect(mobileFallbackAd).toBeNull();
-    expect(adSlots[0]).toHaveClass("ad-slot--side-rail");
-    expect(adSlots[0]).toHaveClass("ad-slot--side-rail-left");
-    expect(adSlots[1]).toHaveClass("ad-slot--side-rail");
-    expect(adSlots[1]).toHaveClass("ad-slot--side-rail-right");
-    expect(adSlots[0].querySelector(".adsbygoogle")).toHaveAttribute(
-      "data-full-width-responsive",
-      "true",
-    );
-    expect(adSlots[1].querySelector(".adsbygoogle")).toHaveAttribute(
-      "data-full-width-responsive",
-      "true",
-    );
-  });
-
-  it("renders a mobile fallback ad between the content and footer on small screens", () => {
-    mockViewportMode("mobile");
-
-    const { container } = render(<App />);
-
-    const shellInner =
-      container.querySelector<HTMLElement>(".app-shell__inner");
-    const appGrid = container.querySelector<HTMLElement>(".app-grid");
-    const footer = container.querySelector<HTMLElement>(".app-footer");
-    const adSlots = screen.getAllByLabelText("Advertisement");
-    const shellChildren = Array.from(shellInner?.children ?? []);
-
-    expect(adSlots).toHaveLength(1);
-    expect(adSlots[0]).toHaveClass("ad-slot--mobile-fallback");
-    expect(adSlots[0]).not.toHaveClass("ad-slot--side-rail");
-    expect(shellInner).toContainElement(adSlots[0]);
-    expect(shellChildren.indexOf(appGrid!)).toBeLessThan(
-      shellChildren.indexOf(adSlots[0]),
-    );
-    expect(shellChildren.indexOf(adSlots[0])).toBeLessThan(
-      shellChildren.indexOf(footer!),
-    );
-  });
-
-  it("queues AdSense for both desktop side rails", () => {
-    mockViewportMode("desktop");
-
-    const adQueue: Array<Record<string, never>> = [];
-    window.adsbygoogle = adQueue;
-
+  it("renders the app without advertisement slots", () => {
     render(<App />);
 
-    expect(adQueue).toEqual([{}, {}]);
-  });
-
-  it("queues AdSense for the mobile fallback slot", () => {
-    mockViewportMode("mobile");
-
-    const adQueue: Array<Record<string, never>> = [];
-    window.adsbygoogle = adQueue;
-
-    render(<App />);
-
-    expect(adQueue).toEqual([{}]);
+    expect(screen.queryByLabelText("Advertisement")).not.toBeInTheDocument();
+    expect(screen.getByText("No ads. No account required.")).toBeInTheDocument();
   });
 
   it("imports a tweet URL and updates the preview", async () => {

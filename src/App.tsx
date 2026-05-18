@@ -19,17 +19,6 @@ type StatusState = {
   message: string;
 };
 
-type AdsByGoogleQueue = Array<Record<string, never>>;
-const DESKTOP_AD_MEDIA_QUERY = "(min-width: 1280px)";
-const SIDE_AD_SLOT_COUNT = 2;
-
-declare global {
-  interface Window {
-    adsbygoogle?: AdsByGoogleQueue;
-    __xshotsQueuedAdCount?: number;
-  }
-}
-
 const INITIAL_DRAFT = createEmptyDraft({
   authorName: "Preview",
   handle: "xshots",
@@ -45,7 +34,6 @@ export default function App({
   clipboardWriter = copyPngToClipboard,
 }: AppProps) {
   const previewRef = useRef<HTMLDivElement>(null);
-  const isDesktopAdLayout = useDesktopAdLayout();
   const [tweetUrl, setTweetUrl] = useState("");
   const [draft, setDraft] = useState(INITIAL_DRAFT);
   const [status, setStatus] = useState<StatusState | null>(null);
@@ -53,11 +41,6 @@ export default function App({
   const [isImporting, setIsImporting] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const [isCopying, setIsCopying] = useState(false);
-  const activeAdSlotCount = isDesktopAdLayout ? SIDE_AD_SLOT_COUNT : 1;
-
-  useEffect(() => {
-    queueAdsenseAds(activeAdSlotCount);
-  }, [activeAdSlotCount]);
 
   useEffect(() => {
     if (!status) {
@@ -228,9 +211,6 @@ export default function App({
         </div>
       ) : null}
       <div className="app-layout app-layout--minimal">
-        {isDesktopAdLayout ? (
-          <AdSlot className="ad-slot ad-slot--side-rail ad-slot--side-rail-left" />
-        ) : null}
         <div className="app-shell__inner">
           <section className="app-hero app-hero--minimal">
             <h1 className="app-hero__title app-hero__title--minimal">
@@ -305,39 +285,17 @@ export default function App({
               </div>
             </section>
           </section>
-          {!isDesktopAdLayout ? (
-            <AdSlot className="ad-slot ad-slot--mobile-fallback" />
-          ) : null}
           <footer className="app-footer">
             <p className="privacy-note">
-              This site uses Google AdSense, which may use cookies to serve
-              personalized ads.
+              No ads. No account required.
               <a href="/privacy.html" className="app-link">
                 Privacy Policy
               </a>
             </p>
           </footer>
         </div>
-        {isDesktopAdLayout ? (
-          <AdSlot className="ad-slot ad-slot--side-rail ad-slot--side-rail-right" />
-        ) : null}
       </div>
     </main>
-  );
-}
-
-function AdSlot({ className }: { className: string }) {
-  return (
-    <aside className={className} aria-label="Advertisement">
-      <ins
-        className="adsbygoogle"
-        style={{ display: "block" }}
-        data-ad-client="ca-pub-7409362530062378"
-        data-ad-slot="5831776750"
-        data-ad-format="auto"
-        data-full-width-responsive="true"
-      ></ins>
-    </aside>
   );
 }
 
@@ -371,62 +329,4 @@ async function copyPngToClipboard(dataUrl: string) {
       [blob.type || "image/png"]: blob,
     }),
   ]);
-}
-
-function queueAdsenseAds(slotCount: number) {
-  if (typeof window === "undefined") {
-    return;
-  }
-
-  try {
-    const adsbygoogle = window.adsbygoogle ?? (window.adsbygoogle = []);
-    const queuedAdCount = window.__xshotsQueuedAdCount ?? 0;
-
-    for (let index = queuedAdCount; index < slotCount; index += 1) {
-      adsbygoogle.push({});
-    }
-
-    window.__xshotsQueuedAdCount = Math.max(queuedAdCount, slotCount);
-  } catch {
-    return;
-  }
-}
-
-function useDesktopAdLayout() {
-  const [isDesktopAdLayout, setIsDesktopAdLayout] = useState(() => {
-    if (typeof window === "undefined" || !window.matchMedia) {
-      return false;
-    }
-
-    return window.matchMedia(DESKTOP_AD_MEDIA_QUERY).matches;
-  });
-
-  useEffect(() => {
-    if (typeof window === "undefined" || !window.matchMedia) {
-      return;
-    }
-
-    const mediaQuery = window.matchMedia(DESKTOP_AD_MEDIA_QUERY);
-    const updateLayout = (event?: MediaQueryListEvent) => {
-      setIsDesktopAdLayout(event ? event.matches : mediaQuery.matches);
-    };
-
-    updateLayout();
-
-    if (typeof mediaQuery.addEventListener === "function") {
-      mediaQuery.addEventListener("change", updateLayout);
-
-      return () => {
-        mediaQuery.removeEventListener("change", updateLayout);
-      };
-    }
-
-    mediaQuery.addListener(updateLayout);
-
-    return () => {
-      mediaQuery.removeListener(updateLayout);
-    };
-  }, []);
-
-  return isDesktopAdLayout;
 }
