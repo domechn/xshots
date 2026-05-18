@@ -436,6 +436,12 @@
   align-items: center;
 }
 
+.preview-panel__actions {
+  display: grid;
+  gap: var(--space-2);
+  justify-items: end;
+}
+
 .preview-panel__title {
   margin: 0;
   font-family: var(--font-display);
@@ -449,6 +455,12 @@
   max-width: 26rem;
   color: rgba(243, 241, 235, 0.62);
   line-height: 1.6;
+}
+
+.preview-panel__copy--actions {
+  margin: 0;
+  max-width: 22rem;
+  text-align: right;
 }
 
 .preview-stage {
@@ -859,6 +871,15 @@
   .import-shell__row,
   .preview-panel__header--minimal {
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  .preview-panel__actions {
+    justify-items: stretch;
+  }
+
+  .preview-panel__copy--actions {
+    max-width: none;
+    text-align: left;
   }
 
   .button--compact {

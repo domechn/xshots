@@ -295,27 +295,29 @@ export default function App({
               <div className="preview-panel__header preview-panel__header--minimal">
                 <div>
                   <h2 className="preview-panel__title">Preview stage</h2>
-                  <p className="preview-panel__copy">
+                </div>
+                <div className="preview-panel__actions">
+                  <div className="preview-panel__toolbar">
+                    <button
+                      className="button--ghost button--compact"
+                      type="button"
+                      onClick={handleCopyToClipboard}
+                      disabled={isOutputDisabled}
+                    >
+                      {isCopying ? "Copying…" : "Copy to clipboard"}
+                    </button>
+                    <button
+                      className="button button--compact"
+                      type="button"
+                      onClick={handleExport}
+                      disabled={isOutputDisabled}
+                    >
+                      {isExporting ? "Rendering…" : "Export PNG"}
+                    </button>
+                  </div>
+                  <p className="preview-panel__copy preview-panel__copy--actions">
                     First click opens sponsor tab. Click again to finish.
                   </p>
-                </div>
-                <div className="preview-panel__toolbar">
-                  <button
-                    className="button--ghost button--compact"
-                    type="button"
-                    onClick={handleCopyToClipboard}
-                    disabled={isOutputDisabled}
-                  >
-                    {isCopying ? "Copying…" : "Copy to clipboard"}
-                  </button>
-                  <button
-                    className="button button--compact"
-                    type="button"
-                    onClick={handleExport}
-                    disabled={isOutputDisabled}
-                  >
-                    {isExporting ? "Rendering…" : "Export PNG"}
-                  </button>
                 </div>
               </div>
 
