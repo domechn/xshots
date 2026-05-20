@@ -241,30 +241,51 @@ async function setImageSource(
   image: HTMLImageElement,
   source: string,
 ): Promise<void> {
-  await new Promise<void>((resolve) => {
-    if (!image.isConnected) {
-      image.setAttribute("src", source);
-      resolve();
+  image.setAttribute("src", source);
+
+  // Disconnected nodes (e.g. test fixtures and the off-DOM clones html-to-image
+  // builds internally) never fire a `load` event, so simply setting the source
+  // is enough.
+  if (!image.isConnected) {
+    return;
+  }
+
+  // Wait for the new source to be fully decoded before continuing. Relying on
+  // the `complete` flag alone is unsafe right after `setAttribute` because
+  // some browsers briefly keep the previous load's `complete=true` state,
+  // which would cause us to resolve before the new image data is ready.
+  // html-to-image then clones the node and rasterises the result while the
+  // inlined data URL hasn't been decoded yet, producing a PNG with blank
+  // image slots.
+  if (typeof image.decode === "function") {
+    try {
+      await image.decode();
       return;
+    } catch {
+      // Fall back to the load/error listeners below if decode() rejects.
     }
+  }
 
-    const cleanup = () => {
-      image.removeEventListener("load", handleDone);
-      image.removeEventListener("error", handleDone);
-    };
+  await new Promise<void>((resolve) => {
+    let settled = false;
 
-    const handleDone = () => {
-      cleanup();
+    const finish = () => {
+      if (settled) {
+        return;
+      }
+
+      settled = true;
+      image.removeEventListener("load", finish);
+      image.removeEventListener("error", finish);
+      window.clearTimeout(timeoutId);
       resolve();
     };
 
-    image.addEventListener("load", handleDone);
-    image.addEventListener("error", handleDone);
-    image.setAttribute("src", source);
+    image.addEventListener("load", finish);
+    image.addEventListener("error", finish);
 
-    if (image.complete) {
-      handleDone();
-    }
+    // Safety net so we never hang if neither event fires.
+    const timeoutId = window.setTimeout(finish, 5000);
   });
 }
 

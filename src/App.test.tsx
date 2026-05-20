@@ -253,6 +253,82 @@ describe("App", () => {
     expect(exporter).toHaveBeenCalledTimes(1);
   });
 
+  it("downloads the exported PNG via an object URL appended to the document", async () => {
+    const user = userEvent.setup();
+    const importer = vi.fn().mockResolvedValue({
+      status: "success",
+      draft: {
+        sourceUrl: "https://x.com/SpaceX/status/1915324363727337943",
+        authorName: "SpaceX",
+        handle: "SpaceX",
+        body: "Export ready.",
+        timestampLabel: "April 23, 2026",
+        avatarUrl: "",
+        mediaUrl: "",
+        verified: true,
+        themeVariant: "orbital",
+      },
+    });
+    const exporter = vi.fn().mockResolvedValue({
+      status: "success",
+      dataUrl: "data:image/png;base64,Zm9v",
+    });
+    vi.spyOn(window, "open").mockReturnValue(null);
+
+    const createObjectUrlSpy = vi
+      .spyOn(URL, "createObjectURL")
+      .mockReturnValue("blob:mock-object-url");
+    const revokeObjectUrlSpy = vi
+      .spyOn(URL, "revokeObjectURL")
+      .mockImplementation(() => undefined);
+
+    const anchorClicks: Array<{
+      href: string;
+      download: string;
+      wasConnected: boolean;
+    }> = [];
+    const originalClick = HTMLAnchorElement.prototype.click;
+    HTMLAnchorElement.prototype.click = function recordClick(this: HTMLAnchorElement) {
+      anchorClicks.push({
+        href: this.href,
+        download: this.download,
+        wasConnected: this.isConnected,
+      });
+    };
+
+    try {
+      render(<App importer={importer} exporter={exporter} />);
+
+      await user.type(
+        screen.getByLabelText("Tweet link"),
+        "https://x.com/SpaceX/status/1915324363727337943",
+      );
+      await user.click(screen.getByRole("button", { name: "Import tweet" }));
+      await user.click(screen.getByRole("button", { name: "Export PNG" }));
+      await user.click(screen.getByRole("button", { name: "Export PNG" }));
+
+      expect(exporter).toHaveBeenCalledTimes(1);
+      expect(createObjectUrlSpy).toHaveBeenCalledTimes(1);
+      const blobArg = createObjectUrlSpy.mock.calls[0][0] as Blob;
+      expect(blobArg).toBeInstanceOf(Blob);
+      expect(blobArg.type).toBe("image/png");
+
+      expect(anchorClicks).toHaveLength(1);
+      expect(anchorClicks[0].href).toBe("blob:mock-object-url");
+      expect(anchorClicks[0].download).toBe(
+        "tweet-1915324363727337943.png",
+      );
+      // The anchor must be in the DOM at click time for mobile browsers.
+      expect(anchorClicks[0].wasConnected).toBe(true);
+
+      // Object URL gets revoked (asynchronously) after the click.
+      await new Promise((resolve) => setTimeout(resolve, 4500));
+      expect(revokeObjectUrlSpy).toHaveBeenCalledWith("blob:mock-object-url");
+    } finally {
+      HTMLAnchorElement.prototype.click = originalClick;
+    }
+  });
+
   it("auto dismisses toast messages after a few seconds", async () => {
     vi.useFakeTimers();
     const importer = vi.fn().mockResolvedValue({
