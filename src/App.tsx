@@ -1,4 +1,4 @@
-import { startTransition, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { exportTweetCardToPng } from "./features/export/exportPng";
 import { importTweetFromUrl } from "./features/tweet-import/importTweet";
 import {
@@ -19,6 +19,7 @@ type StatusState = {
   tone: StatusTone;
   message: string;
 };
+type SharePngResult = Awaited<ReturnType<typeof exportTweetCardToPng>>;
 
 const INITIAL_DRAFT = createEmptyDraft({
   authorName: "Preview",
@@ -44,11 +45,15 @@ export default function App({
 }: AppProps) {
   const previewRef = useRef<HTMLDivElement>(null);
   const sponsorUnlockExpiresAtRef = useRef<number | null>(null);
+  const importRunIdRef = useRef(0);
   const [tweetUrl, setTweetUrl] = useState("");
   const [draft, setDraft] = useState(INITIAL_DRAFT);
+  const [renderedSharePng, setRenderedSharePng] =
+    useState<SharePngResult | null>(null);
   const [status, setStatus] = useState<StatusState | null>(null);
   const [isStatusExiting, setIsStatusExiting] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
+  const [isPreparingPng, setIsPreparingPng] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const [isCopying, setIsCopying] = useState(false);
 
@@ -94,6 +99,9 @@ export default function App({
     }
 
     sponsorUnlockExpiresAtRef.current = null;
+    const importRunId = importRunIdRef.current + 1;
+    importRunIdRef.current = importRunId;
+    setRenderedSharePng(null);
     setIsImporting(true);
     clearStatus();
 
@@ -101,18 +109,36 @@ export default function App({
       const result = await importer(tweetUrl.trim());
 
       if (result.status === "success") {
-        startTransition(() => {
-          setDraft(
-            createEmptyDraft({
-              ...INITIAL_DRAFT,
-              ...result.draft,
-            }),
-          );
+        const nextDraft = createEmptyDraft({
+          ...INITIAL_DRAFT,
+          ...result.draft,
         });
-        showStatus({
-          tone: "success",
-          message: "Import complete. Export when ready.",
-        });
+        setDraft(nextDraft);
+        setIsPreparingPng(true);
+        await waitForPreviewRender();
+
+        if (importRunIdRef.current !== importRunId) {
+          return;
+        }
+
+        const pngResult = await renderSharePng(nextDraft);
+
+        if (importRunIdRef.current !== importRunId) {
+          return;
+        }
+
+        setRenderedSharePng(pngResult);
+        showStatus(
+          pngResult.status === "success"
+            ? {
+                tone: "success",
+                message: "Import complete. Copy or export when ready.",
+              }
+            : {
+                tone: "warning",
+                message: pngResult.message,
+              },
+        );
       } else {
         showStatus({
           tone: "warning",
@@ -129,6 +155,7 @@ export default function App({
       });
     } finally {
       setIsImporting(false);
+      setIsPreparingPng(false);
     }
   }
 
@@ -141,7 +168,15 @@ export default function App({
     clearStatus();
 
     try {
-      const result = await renderSharePng();
+      const result = renderedSharePng;
+
+      if (!result) {
+        showStatus({
+          tone: "warning",
+          message: "The PNG is still being prepared. Please try again shortly.",
+        });
+        return;
+      }
 
       if (result.status === "blocked") {
         showStatus({
@@ -176,7 +211,15 @@ export default function App({
     clearStatus();
 
     try {
-      const result = await renderSharePng();
+      const result = renderedSharePng;
+
+      if (!result) {
+        showStatus({
+          tone: "warning",
+          message: "The PNG is still being prepared. Please try again shortly.",
+        });
+        return;
+      }
 
       if (result.status === "blocked") {
         showStatus({
@@ -204,13 +247,13 @@ export default function App({
     }
   }
 
-  async function renderSharePng() {
+  async function renderSharePng(draftToRender = draft) {
     if (!previewRef.current) {
       throw new Error("The preview is not ready yet.");
     }
 
     return await exporter(previewRef.current, {
-      draft,
+      draft: draftToRender,
       size: "portrait",
     });
   }
@@ -232,7 +275,13 @@ export default function App({
     return false;
   }
 
-  const isOutputDisabled = !draft.sourceUrl || isExporting || isCopying;
+  const isOutputDisabled =
+    !draft.sourceUrl ||
+    !renderedSharePng ||
+    isImporting ||
+    isPreparingPng ||
+    isExporting ||
+    isCopying;
 
   return (
     <main className="app-shell app-shell--minimal">
@@ -312,7 +361,7 @@ export default function App({
                       onClick={handleExport}
                       disabled={isOutputDisabled}
                     >
-                      {isExporting ? "Rendering…" : "Export PNG"}
+                      {isExporting ? "Exporting…" : "Export PNG"}
                     </button>
                   </div>
                   <p className="preview-panel__copy preview-panel__copy--actions">
@@ -346,6 +395,10 @@ export default function App({
 function buildFilename(sourceUrl: string): string {
   const statusId = sourceUrl.match(/status\/(\d+)/)?.[1];
   return statusId ? `tweet-${statusId}.png` : `tweet-${Date.now()}.png`;
+}
+
+async function waitForPreviewRender() {
+  await Promise.resolve();
 }
 
 function downloadDataUrl(dataUrl: string, filename: string) {
