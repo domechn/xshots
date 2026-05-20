@@ -349,10 +349,61 @@ function buildFilename(sourceUrl: string): string {
 }
 
 function downloadDataUrl(dataUrl: string, filename: string) {
+  const blob = dataUrlToBlob(dataUrl);
+  // Prefer an object URL over a multi-megabyte data: URL: mobile browsers
+  // (notably iOS Safari) often refuse to download data: URLs whose payload
+  // exceeds a small size, or simply navigate to them instead of saving them.
+  const objectUrl = blob ? URL.createObjectURL(blob) : null;
+  const href = objectUrl ?? dataUrl;
+
   const link = document.createElement("a");
-  link.href = dataUrl;
+  link.href = href;
   link.download = filename;
-  link.click();
+  link.rel = "noopener";
+
+  // The anchor must be in the document for `.click()` to dispatch a real
+  // navigation/download on mobile Safari and some Android browsers.
+  document.body.appendChild(link);
+
+  try {
+    link.click();
+  } finally {
+    document.body.removeChild(link);
+
+    if (objectUrl) {
+      // Defer revocation so the browser has time to start the download.
+      window.setTimeout(() => URL.revokeObjectURL(objectUrl), 4000);
+    }
+  }
+}
+
+function dataUrlToBlob(dataUrl: string): Blob | null {
+  const match = dataUrl.match(/^data:([^;,]+)?(;base64)?,(.*)$/);
+
+  if (!match) {
+    return null;
+  }
+
+  const mimeType = match[1] || "application/octet-stream";
+  const isBase64 = Boolean(match[2]);
+  const payload = match[3] ?? "";
+
+  try {
+    if (isBase64) {
+      const binary = atob(payload);
+      const bytes = new Uint8Array(binary.length);
+
+      for (let index = 0; index < binary.length; index += 1) {
+        bytes[index] = binary.charCodeAt(index);
+      }
+
+      return new Blob([bytes], { type: mimeType });
+    }
+
+    return new Blob([decodeURIComponent(payload)], { type: mimeType });
+  } catch {
+    return null;
+  }
 }
 
 async function copyPngToClipboard(dataUrl: string) {

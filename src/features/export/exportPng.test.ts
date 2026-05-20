@@ -3,6 +3,60 @@ import { createEmptyDraft } from "../tweet-import/types";
 import { exportTweetCardToPng } from "./exportPng";
 
 describe("exportTweetCardToPng", () => {
+  it("waits for image decode before exporting so the swap is fully applied", async () => {
+    const node = document.createElement("div");
+    node.innerHTML = '<img alt="avatar" src="https://images.example.com/a.jpg">';
+    document.body.appendChild(node);
+
+    const image = node.querySelector("img") as HTMLImageElement;
+    let decodeResolved = false;
+    let resolveDecode: () => void = () => undefined;
+    let decodeCalls = 0;
+    // jsdom doesn't implement HTMLImageElement.decode; install our own so we
+    // can observe when (and whether) it is awaited.
+    (image as { decode?: () => Promise<void> }).decode = () => {
+      decodeCalls += 1;
+      return new Promise<void>((resolve) => {
+        resolveDecode = () => {
+          decodeResolved = true;
+          resolve();
+        };
+      });
+    };
+
+    const toPng = vi.fn(async () => {
+      // Export must not start until decode() of the swapped data URL resolves.
+      expect(decodeResolved).toBe(true);
+      return "data:image/png;base64,abc";
+    });
+
+    const exportPromise = exportTweetCardToPng(node, {
+      draft: createEmptyDraft({
+        avatarUrl: "https://images.example.com/a.jpg",
+      }),
+      resolveAssetUrl: async () => "data:image/png;base64,avatar",
+      toPng,
+    } as never);
+
+    // Allow the async swap to progress through several await points until it
+    // reaches the decode() await.
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(decodeCalls).toBe(1);
+    expect(toPng).not.toHaveBeenCalled();
+
+    resolveDecode();
+
+    const result = await exportPromise;
+
+    expect(result).toEqual({
+      status: "success",
+      dataUrl: "data:image/png;base64,abc",
+    });
+    expect(toPng).toHaveBeenCalledOnce();
+
+    document.body.removeChild(node);
+  });
+
   it("blocks export when a remote asset cannot be verified for browser-safe export", async () => {
     const node = document.createElement("div");
     const toPng = vi.fn();
