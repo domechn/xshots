@@ -608,10 +608,12 @@ function extractEmbeddedTweet(
 
   const mediaUrls = extractPhotoMediaUrls(status);
   const mediaUrl = mediaUrls[0] ?? extractFallbackMediaUrl(status);
+  const hasMedia = mediaUrls.length > 0 || Boolean(mediaUrl);
   const body = normalizeTweetText(
     stripMediaLinksFromText(
       status.raw_text?.text ?? status.text ?? "",
       extractMediaTextUrls(status),
+      hasMedia,
     ),
   );
 
@@ -692,13 +694,24 @@ function extractMediaTextUrls(status: RichTweetStatus): string[] {
   );
 }
 
-function stripMediaLinksFromText(text: string, mediaLinkUrls: string[]): string {
+function stripMediaLinksFromText(
+  text: string,
+  mediaLinkUrls: string[],
+  hasMedia: boolean = false,
+): string {
   let nextText = text;
 
   for (const mediaLinkUrl of mediaLinkUrls) {
     nextText = nextText
       .replace(new RegExp(escapeRegExp(mediaLinkUrl), "g"), "")
       .trim();
+  }
+
+  // When media is attached, Twitter/X always appends a t.co gallery link at the
+  // very end of the tweet text.  Strip it as a fallback for cases where the
+  // t.co↔media-URL mapping is not included in the API response.
+  if (hasMedia) {
+    nextText = nextText.replace(/\s*https:\/\/t\.co\/\S+$/, "").trim();
   }
 
   return nextText;
