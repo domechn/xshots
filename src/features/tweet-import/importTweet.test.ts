@@ -417,6 +417,124 @@ describe("importTweetFromUrl", () => {
     });
   });
 
+  it("removes trailing t.co image url from body when media is attached but entity mapping is absent", async () => {
+    const result = await importTweetFromUrl(
+      "https://x.com/SpaceX/status/1915324363727337943",
+      {
+        fetcher: async () => ({
+          ok: true,
+          status: 200,
+          json: async () => ({
+            code: 200,
+            status: {
+              text: "Starship reached orbit. https://t.co/gallery123",
+              created_at: "April 23, 2026",
+              author: {
+                name: "SpaceX",
+                screen_name: "SpaceX",
+              },
+              media: {
+                photos: [
+                  {
+                    type: "photo",
+                    url: "https://pbs.twimg.com/media/starship.jpg",
+                    width: 1600,
+                    height: 900,
+                  },
+                ],
+              },
+            },
+          }),
+        }),
+      },
+    );
+
+    expect(result.status).toBe("success");
+    expect(result.draft.body).toBe("Starship reached orbit.");
+    expect(result.draft.mediaUrls).toEqual([
+      "https://pbs.twimg.com/media/starship.jpg",
+    ]);
+  });
+
+  it("removes trailing t.co image url from quoted tweet body when entity mapping is absent", async () => {
+    const result = await importTweetFromUrl(
+      "https://x.com/SpaceX/status/1915324363727337943",
+      {
+        fetcher: async () => ({
+          ok: true,
+          status: 200,
+          json: async () => ({
+            code: 200,
+            status: {
+              text: "Main tweet.",
+              created_at: "April 23, 2026",
+              author: {
+                name: "SpaceX",
+                screen_name: "SpaceX",
+              },
+              quote: {
+                text: "Quoted with image. https://t.co/quotegallery",
+                created_at: "April 22, 2026",
+                author: {
+                  name: "NASA",
+                  screen_name: "NASA",
+                },
+                media: {
+                  photos: [
+                    {
+                      type: "photo",
+                      url: "https://pbs.twimg.com/media/nasa-photo.jpg",
+                    },
+                  ],
+                },
+              },
+            },
+          }),
+        }),
+      },
+    );
+
+    expect(result.status).toBe("success");
+    expect(result.draft.quotedTweet).toMatchObject({
+      body: "Quoted with image.",
+      mediaUrls: ["https://pbs.twimg.com/media/nasa-photo.jpg"],
+    });
+  });
+
+  it("keeps non-media t.co links in body when they precede the image gallery link", async () => {
+    const result = await importTweetFromUrl(
+      "https://x.com/SpaceX/status/1915324363727337943",
+      {
+        fetcher: async () => ({
+          ok: true,
+          status: 200,
+          json: async () => ({
+            code: 200,
+            status: {
+              text: "Read this https://t.co/articlelink https://t.co/gallery123",
+              created_at: "April 23, 2026",
+              author: {
+                name: "SpaceX",
+                screen_name: "SpaceX",
+              },
+              media: {
+                photos: [
+                  {
+                    type: "photo",
+                    url: "https://pbs.twimg.com/media/starship.jpg",
+                  },
+                ],
+              },
+            },
+          }),
+        }),
+      },
+    );
+
+    expect(result.status).toBe("success");
+    expect(result.draft.body).toBe("Read this https://t.co/articlelink");
+  });
+
   it("maps a successful oEmbed payload into a tweet draft", async () => {
     const result = await importTweetFromUrl(
       "https://x.com/SpaceX/status/1915324363727337943",
