@@ -18,6 +18,16 @@ type RichTweetResponse = {
 
 type RichTweetQuoteCandidate = RichTweetStatus | { status?: RichTweetStatus };
 
+type RichTweetMediaItem = {
+  type?: string;
+  url?: string;
+  media_url?: string;
+  media_url_https?: string;
+  thumbnail_url?: string | null;
+  expanded_url?: string;
+  display_url?: string;
+};
+
 type RichTweetStatus = {
   text?: string;
   raw_text?: {
@@ -35,17 +45,16 @@ type RichTweetStatus = {
     };
   };
   media?: {
-    photos?: Array<{
-      url?: string;
-    }>;
-    all?: Array<{
-      type?: string;
-      url?: string;
-      thumbnail_url?: string | null;
-    }>;
-    videos?: Array<{
-      thumbnail_url?: string | null;
-    }>;
+    photos?: RichTweetMediaItem[];
+    all?: RichTweetMediaItem[];
+    videos?: RichTweetMediaItem[];
+  };
+  media_extended?: RichTweetMediaItem[];
+  extended_entities?: {
+    media?: RichTweetMediaItem[];
+  };
+  entities?: {
+    media?: RichTweetMediaItem[];
   };
   quote?: RichTweetQuoteCandidate | null;
   quoted?: RichTweetQuoteCandidate | null;
@@ -593,31 +602,22 @@ function extractEmbeddedTweet(
   status: RichTweetStatus | undefined,
   sourceUrl: string,
 ): EmbeddedTweet | null {
-  const body = normalizeTweetText(status?.raw_text?.text ?? status?.text ?? "");
-
-  if (!status || !body) {
+  if (!status) {
     return null;
   }
 
-  const mediaUrls = dedupeMediaUrls(
-    [
-      ...(status.media?.photos ?? []).map((photo) => photo.url ?? ""),
-      ...(status.media?.all ?? [])
-        .filter((item) => item.type === "photo")
-        .map((item) => item.url ?? ""),
-    ]
-      .map((mediaUrl) => normalizeAssetUrl(mediaUrl))
-      .filter(Boolean),
+  const mediaUrls = extractPhotoMediaUrls(status);
+  const mediaUrl = mediaUrls[0] ?? extractFallbackMediaUrl(status);
+  const body = normalizeTweetText(
+    stripMediaLinksFromText(
+      status.raw_text?.text ?? status.text ?? "",
+      extractMediaTextUrls(status),
+    ),
   );
 
-  const mediaUrl =
-    mediaUrls[0] ??
-    normalizeAssetUrl(
-      status.media?.all?.find((item) => Boolean(item.url))?.url ??
-        status.media?.videos?.find((video) => Boolean(video.thumbnail_url))
-          ?.thumbnail_url ??
-        "",
-    );
+  if (!body && !mediaUrl && !mediaUrls.length) {
+    return null;
+  }
 
   return {
     sourceUrl,
@@ -631,6 +631,94 @@ function extractEmbeddedTweet(
     mediaUrls,
     verified: Boolean(status.author?.verification?.verified),
   };
+}
+
+function extractPhotoMediaUrls(status: RichTweetStatus): string[] {
+  return dedupeMediaUrls(
+    [
+      ...(status.media?.photos ?? []).map((photo) => readMediaPhotoUrl(photo)),
+      ...(status.media?.all ?? [])
+        .filter((item) => item.type === "photo")
+        .map((item) => readMediaPhotoUrl(item)),
+      ...(status.media_extended ?? [])
+        .filter((item) => item.type === "photo")
+        .map((item) => readMediaPhotoUrl(item)),
+      ...(status.extended_entities?.media ?? [])
+        .filter((item) => item.type === "photo")
+        .map((item) => readMediaPhotoUrl(item)),
+      ...(status.entities?.media ?? [])
+        .filter((item) => item.type === "photo")
+        .map((item) => readMediaPhotoUrl(item)),
+    ]
+      .map((mediaUrl) => normalizeAssetUrl(mediaUrl))
+      .filter(Boolean),
+  );
+}
+
+function extractFallbackMediaUrl(status: RichTweetStatus): string {
+  const fallbackMedia = [
+    ...(status.media?.all ?? []),
+    ...(status.media?.videos ?? []),
+    ...(status.media_extended ?? []),
+    ...(status.extended_entities?.media ?? []),
+    ...(status.entities?.media ?? []),
+  ].find((item) => Boolean(readMediaPhotoUrl(item) || item.thumbnail_url));
+
+  return normalizeAssetUrl(
+    fallbackMedia?.thumbnail_url ?? readMediaPhotoUrl(fallbackMedia ?? {}) ?? "",
+  );
+}
+
+function readMediaPhotoUrl(item: RichTweetMediaItem): string {
+  return (
+    item.media_url_https ??
+    item.media_url ??
+    (isTextLinkUrl(item.url) ? "" : item.url) ??
+    ""
+  );
+}
+
+function extractMediaTextUrls(status: RichTweetStatus): string[] {
+  return dedupeMediaUrls(
+    [
+      ...(status.media?.photos ?? []),
+      ...(status.media?.all ?? []),
+      ...(status.media_extended ?? []),
+      ...(status.extended_entities?.media ?? []),
+      ...(status.entities?.media ?? []),
+    ]
+      .flatMap((item) => [item.url, item.expanded_url, item.display_url])
+      .filter((mediaTextUrl): mediaTextUrl is string => Boolean(mediaTextUrl)),
+  );
+}
+
+function stripMediaLinksFromText(text: string, mediaLinkUrls: string[]): string {
+  let nextText = text;
+
+  for (const mediaLinkUrl of mediaLinkUrls) {
+    nextText = nextText
+      .replace(new RegExp(escapeRegExp(mediaLinkUrl), "g"), "")
+      .trim();
+  }
+
+  return nextText;
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function isTextLinkUrl(url: string | undefined): boolean {
+  if (!url) {
+    return false;
+  }
+
+  try {
+    const parsedUrl = new URL(url);
+    return parsedUrl.hostname === "t.co";
+  } catch {
+    return false;
+  }
 }
 
 function normalizeAssetUrl(assetUrl: string): string {

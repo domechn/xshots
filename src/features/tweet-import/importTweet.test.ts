@@ -369,6 +369,54 @@ describe("importTweetFromUrl", () => {
     });
   });
 
+  it("maps quoted tweet entity media and removes the image link from quoted text", async () => {
+    const result = await importTweetFromUrl(
+      "https://x.com/SpaceX/status/1915324363727337943",
+      {
+        fetcher: async () => ({
+          ok: true,
+          status: 200,
+          json: async () => ({
+            code: 200,
+            status: {
+              text: "Main launch update.",
+              created_at: "April 23, 2026",
+              author: {
+                name: "SpaceX",
+                screen_name: "SpaceX",
+              },
+              quote: {
+                text: "Quoted image note. https://t.co/quotephoto",
+                created_at: "April 22, 2026",
+                author: {
+                  name: "NASA",
+                  screen_name: "NASA",
+                },
+                entities: {
+                  media: [
+                    {
+                      type: "photo",
+                      url: "https://t.co/quotephoto",
+                      media_url_https:
+                        "https://pbs.twimg.com/media/quote-photo.jpg",
+                    },
+                  ],
+                },
+              },
+            },
+          }),
+        }),
+      },
+    );
+
+    expect(result.status).toBe("success");
+    expect(result.draft.quotedTweet).toMatchObject({
+      body: "Quoted image note.",
+      mediaUrl: "https://pbs.twimg.com/media/quote-photo.jpg",
+      mediaUrls: ["https://pbs.twimg.com/media/quote-photo.jpg"],
+    });
+  });
+
   it("maps a successful oEmbed payload into a tweet draft", async () => {
     const result = await importTweetFromUrl(
       "https://x.com/SpaceX/status/1915324363727337943",
