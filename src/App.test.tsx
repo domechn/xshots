@@ -70,12 +70,8 @@ describe("App", () => {
         themeVariant: "orbital",
       },
     });
-    const exporter = vi.fn().mockResolvedValue({
-      status: "success",
-      dataUrl: "data:image/png;base64,Zm9v",
-    });
 
-    render(<App importer={importer} exporter={exporter} />);
+    render(<App importer={importer} />);
 
     await user.type(
       screen.getByLabelText("Tweet link"),
@@ -89,7 +85,6 @@ describe("App", () => {
         "Booster landing confirmed.",
       ),
     ).toBeInTheDocument();
-    expect(exporter).toHaveBeenCalledTimes(1);
   });
 
   it("shows import success as a top toast instead of an inline form banner", async () => {
@@ -111,11 +106,7 @@ describe("App", () => {
         quotedTweet: null,
       },
     });
-    const exporter = vi.fn().mockResolvedValue({
-      status: "success",
-      dataUrl: "data:image/png;base64,Zm9v",
-    });
-    const { container } = render(<App importer={importer} exporter={exporter} />);
+    const { container } = render(<App importer={importer} />);
 
     await user.type(
       screen.getByLabelText("Tweet link"),
@@ -124,9 +115,7 @@ describe("App", () => {
     await user.click(screen.getByRole("button", { name: "Import tweet" }));
 
     const toast = screen.getByRole("status");
-    expect(toast).toHaveTextContent(
-      "Import complete. Copy or export when ready.",
-    );
+    expect(toast).toHaveTextContent("Import complete. Export when ready.");
     expect(container.querySelector(".import-shell")).not.toContainElement(
       toast,
     );
@@ -199,8 +188,6 @@ describe("App", () => {
       "https://x.com/SpaceX/status/1915324363727337943",
     );
     await user.click(screen.getByRole("button", { name: "Import tweet" }));
-    expect(exporter).toHaveBeenCalledTimes(1);
-
     await user.click(screen.getByRole("button", { name: "Copy to clipboard" }));
 
     expect(openSpy).toHaveBeenCalledWith(
@@ -208,7 +195,7 @@ describe("App", () => {
       "_blank",
       "noopener,noreferrer",
     );
-    expect(exporter).toHaveBeenCalledTimes(1);
+    expect(exporter).not.toHaveBeenCalled();
     expect(clipboardWriter).not.toHaveBeenCalled();
     expect(screen.getByRole("status")).toHaveTextContent(
       "Sponsor link opened in a new tab. Return here and press Copy to clipboard again to continue.",
@@ -249,8 +236,6 @@ describe("App", () => {
       "https://x.com/SpaceX/status/1915324363727337943",
     );
     await user.click(screen.getByRole("button", { name: "Import tweet" }));
-    expect(exporter).toHaveBeenCalledTimes(1);
-
     await user.click(screen.getByRole("button", { name: "Export PNG" }));
 
     expect(openSpy).toHaveBeenCalledWith(
@@ -258,7 +243,7 @@ describe("App", () => {
       "_blank",
       "noopener,noreferrer",
     );
-    expect(exporter).toHaveBeenCalledTimes(1);
+    expect(exporter).not.toHaveBeenCalled();
     expect(screen.getByRole("status")).toHaveTextContent(
       "Sponsor link opened in a new tab. Return here and press Export PNG again to continue.",
     );
@@ -319,8 +304,6 @@ describe("App", () => {
         "https://x.com/SpaceX/status/1915324363727337943",
       );
       await user.click(screen.getByRole("button", { name: "Import tweet" }));
-      expect(exporter).toHaveBeenCalledTimes(1);
-
       await user.click(screen.getByRole("button", { name: "Export PNG" }));
       await user.click(screen.getByRole("button", { name: "Export PNG" }));
 
@@ -365,12 +348,8 @@ describe("App", () => {
         quotedTweet: null,
       },
     });
-    const exporter = vi.fn().mockResolvedValue({
-      status: "success",
-      dataUrl: "data:image/png;base64,Zm9v",
-    });
 
-    render(<App importer={importer} exporter={exporter} />);
+    render(<App importer={importer} />);
 
     fireEvent.change(screen.getByLabelText("Tweet link"), {
       target: {
@@ -384,7 +363,7 @@ describe("App", () => {
     });
 
     expect(screen.getByRole("status")).toHaveTextContent(
-      "Import complete. Copy or export when ready.",
+      "Import complete. Export when ready.",
     );
 
     act(() => {
