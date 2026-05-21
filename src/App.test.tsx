@@ -281,6 +281,99 @@ describe("App", () => {
     expect(clipboardWriter).toHaveBeenCalledWith("data:image/png;base64,Zm9v");
   });
 
+  it("copies the prepared PNG without refetching the data url", async () => {
+    const user = userEvent.setup();
+    const importer = vi.fn().mockResolvedValue({
+      status: "success",
+      draft: {
+        sourceUrl: "https://x.com/SpaceX/status/1915324363727337943",
+        authorName: "SpaceX",
+        handle: "SpaceX",
+        body: "Clipboard ready.",
+        bodyHtml: "",
+        timestampLabel: "April 23, 2026",
+        avatarUrl: "",
+        mediaUrl: "https://images.example.com/poster.jpg",
+        mediaUrls: ["https://images.example.com/poster.jpg"],
+        verified: true,
+        themeVariant: "orbital",
+        quotedTweet: null,
+        replyCount: null,
+        repostCount: null,
+        likeCount: null,
+        bookmarkCount: null,
+      },
+    });
+    const exporter = vi.fn().mockResolvedValue({
+      status: "success",
+      dataUrl: "data:image/png;base64,Zm9v",
+    });
+    const writeMock = vi.fn().mockResolvedValue(undefined);
+    const fetchSpy = vi
+      .spyOn(globalThis, "fetch")
+      .mockRejectedValue(new Error("copy should not fetch the data url"));
+    const originalClipboard = navigator.clipboard;
+    const originalClipboardItem = globalThis.ClipboardItem;
+
+    class ClipboardItemMock {
+      constructor(readonly items: Record<string, Blob>) {}
+    }
+
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: {
+        write: writeMock,
+      },
+    });
+    Object.defineProperty(globalThis, "ClipboardItem", {
+      configurable: true,
+      value: ClipboardItemMock,
+    });
+
+    try {
+      render(
+        <App
+          importer={importer}
+          exporter={exporter}
+          sponsorUnlockEnabled={false}
+        />,
+      );
+
+      await user.type(
+        screen.getByLabelText("Tweet link"),
+        "https://x.com/SpaceX/status/1915324363727337943",
+      );
+      await user.click(screen.getByRole("button", { name: "Import tweet" }));
+
+      await waitFor(() => {
+        expect(exporter).toHaveBeenCalledTimes(1);
+      });
+
+      await user.click(
+        screen.getByRole("button", { name: "Copy to clipboard" }),
+      );
+
+      await waitFor(() => {
+        expect(writeMock).toHaveBeenCalledTimes(1);
+      });
+
+      expect(fetchSpy).not.toHaveBeenCalled();
+      expect(writeMock.mock.calls[0][0]).toHaveLength(1);
+      expect(
+        (writeMock.mock.calls[0][0][0] as ClipboardItemMock).items["image/png"],
+      ).toBeInstanceOf(Blob);
+    } finally {
+      Object.defineProperty(navigator, "clipboard", {
+        configurable: true,
+        value: originalClipboard,
+      });
+      Object.defineProperty(globalThis, "ClipboardItem", {
+        configurable: true,
+        value: originalClipboardItem,
+      });
+    }
+  });
+
   it("prepares the share image after import and reuses it for PNG export", async () => {
     const user = userEvent.setup();
     const importer = vi.fn().mockResolvedValue({

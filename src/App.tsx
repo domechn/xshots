@@ -556,8 +556,11 @@ async function copyPngToClipboard(dataUrl: string) {
     throw new Error("Clipboard image copy is not supported in this browser.");
   }
 
-  const response = await fetch(dataUrl);
-  const blob = await response.blob();
+  const blob = dataUrlToBlob(dataUrl);
+
+  if (!blob) {
+    throw new Error("The PNG could not be prepared for clipboard copy.");
+  }
 
   await navigator.clipboard.write([
     new ClipboardItem({
