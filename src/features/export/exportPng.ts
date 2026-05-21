@@ -23,6 +23,7 @@ const EXPORT_SIZES: Record<ExportSizeKey, { width: number; height: number }> = {
   landscape: { width: 1200, height: 675 },
   portrait: { width: 1080, height: 1350 },
 };
+const EXPORT_PIXEL_RATIO = 1.5;
 
 export async function exportTweetCardToPng(
   node: HTMLElement,
@@ -66,7 +67,7 @@ export async function exportTweetCardToPng(
   try {
     const dataUrl = await toPng(node, {
       cacheBust: true,
-      pixelRatio: 2,
+      pixelRatio: EXPORT_PIXEL_RATIO,
       backgroundColor: "#05070a",
       canvasWidth: canvasSize.width,
       canvasHeight: canvasSize.height,

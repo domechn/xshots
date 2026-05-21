@@ -1,5 +1,6 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
+import "../../app.css";
 import { createEmptyDraft } from "../tweet-import/types";
 import { TweetCard } from "./TweetCard";
 
@@ -245,5 +246,160 @@ describe("TweetCard", () => {
     expect(
       container.querySelector(".tweet-card__media-grid--two"),
     ).not.toBeNull();
+  });
+
+  it("preserves the intrinsic aspect ratio for a single quoted image", () => {
+    render(
+      <TweetCard
+        draft={createEmptyDraft({
+          authorName: "SpaceX",
+          handle: "SpaceX",
+          body: "Main launch update.",
+          quotedTweet: {
+            sourceUrl: "",
+            authorName: "NASA",
+            handle: "NASA",
+            body: "Quoted mission note.",
+            bodyHtml: "",
+            timestampLabel: "April 22, 2026",
+            avatarUrl: "",
+            mediaUrl: "data:image/png;base64,quote-single",
+            mediaUrls: ["data:image/png;base64,quote-single"],
+            verified: true,
+          },
+        })}
+      />,
+    );
+
+    const image = screen.getByRole("img", {
+      name: "Quoted tweet media preview",
+    });
+
+    Object.defineProperty(image, "naturalWidth", {
+      configurable: true,
+      value: 1080,
+    });
+    Object.defineProperty(image, "naturalHeight", {
+      configurable: true,
+      value: 1350,
+    });
+
+    fireEvent.load(image);
+
+    expect(image.closest(".tweet-card__media-shell")).toHaveStyle({
+      aspectRatio: "0.8",
+      minHeight: "0",
+    });
+  });
+
+  it("uses a clamped quoted body while keeping quoted media visible", () => {
+    const { container } = render(
+      <TweetCard
+        draft={createEmptyDraft({
+          authorName: "SpaceX",
+          handle: "SpaceX",
+          body: "Main launch update.",
+          quotedTweet: {
+            sourceUrl: "",
+            authorName: "NASA",
+            handle: "NASA",
+            body: "Line 1 Line 2 Line 3 Line 4 Line 5 Line 6 Line 7 Line 8",
+            bodyHtml: "",
+            timestampLabel: "April 22, 2026",
+            avatarUrl: "",
+            mediaUrl: "data:image/png;base64,quote-single",
+            mediaUrls: ["data:image/png;base64,quote-single"],
+            verified: true,
+          },
+        })}
+      />,
+    );
+
+    expect(container.querySelector(".tweet-card__quote")).toHaveClass(
+      "tweet-card__quote--media",
+    );
+    expect(container.querySelector(".tweet-card__quote-text")).toHaveClass(
+      "tweet-card__quote-text--clamped",
+    );
+    expect(
+      screen.getByRole("img", { name: "Quoted tweet media preview" }),
+    ).toBeInTheDocument();
+  });
+
+  it("preserves quoted text line breaks while clamped to five lines", () => {
+    const { container } = render(
+      <TweetCard
+        draft={createEmptyDraft({
+          authorName: "SpaceX",
+          handle: "SpaceX",
+          body: "Main launch update.",
+          quotedTweet: {
+            sourceUrl: "",
+            authorName: "NASA",
+            handle: "NASA",
+            body: "First line\nSecond line\nThird line\nFourth line",
+            bodyHtml: "",
+            timestampLabel: "April 22, 2026",
+            avatarUrl: "",
+            mediaUrl: "data:image/png;base64,quote-single",
+            mediaUrls: ["data:image/png;base64,quote-single"],
+            verified: true,
+          },
+        })}
+      />,
+    );
+
+    const quoteText = container.querySelector(".tweet-card__quote-text");
+    const clampRule = Array.from(document.styleSheets)
+      .flatMap((sheet) => Array.from(sheet.cssRules))
+      .find(
+        (rule): rule is CSSStyleRule =>
+          rule instanceof CSSStyleRule &&
+          rule.selectorText === ".tweet-card__quote-text--clamped",
+      );
+
+    expect(quoteText).not.toBeNull();
+    expect(window.getComputedStyle(quoteText as Element).whiteSpace).toBe(
+      "pre-line",
+    );
+    expect(clampRule?.style.getPropertyValue("-webkit-line-clamp")).toBe("5");
+  });
+
+  it("uses a 16px main body scale and a 13px quoted body scale", () => {
+    const { container } = render(
+      <TweetCard
+        draft={createEmptyDraft({
+          authorName: "SpaceX",
+          handle: "SpaceX",
+          body: "Main launch update.",
+          quotedTweet: {
+            sourceUrl: "",
+            authorName: "NASA",
+            handle: "NASA",
+            body: "Quoted mission note.",
+            bodyHtml: "",
+            timestampLabel: "April 22, 2026",
+            avatarUrl: "",
+            mediaUrl: "",
+            mediaUrls: [],
+            verified: true,
+          },
+        })}
+      />,
+    );
+
+    const mainText = container.querySelector(".tweet-card__text");
+    const quoteText = container.querySelector(".tweet-card__quote-text");
+
+    expect(mainText).not.toBeNull();
+    expect(quoteText).not.toBeNull();
+    expect(window.getComputedStyle(mainText as Element).fontSize).toBe("16px");
+    expect(window.getComputedStyle(quoteText as Element).fontSize).toBe("13px");
+    expect(window.getComputedStyle(mainText as Element).letterSpacing).toBe(
+      "0.4px",
+    );
+    expect(window.getComputedStyle(quoteText as Element).letterSpacing).toBe(
+      "0.325px",
+    );
   });
 });

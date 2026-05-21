@@ -1,6 +1,6 @@
 import type { EmbeddedTweet, TweetDraft } from "../tweet-import/types";
-import { Fragment } from "react";
-import type { ReactNode } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
+import type { ReactNode, SyntheticEvent } from "react";
 
 const ENGAGEMENT_COUNT_FORMATTER = new Intl.NumberFormat("en-US", {
   notation: "compact",
@@ -98,9 +98,12 @@ function QuotedTweetCard({ tweet }: { tweet: EmbeddedTweet }) {
     : tweet.mediaUrl
       ? [tweet.mediaUrl]
       : [];
+  const quoteClassName = mediaUrls.length
+    ? "tweet-card__quote tweet-card__quote--media"
+    : "tweet-card__quote";
 
   return (
-    <section className="tweet-card__quote" aria-label="Quoted tweet preview">
+    <section className={quoteClassName} aria-label="Quoted tweet preview">
       <div className="tweet-card__quote-header">
         <div className="tweet-card__quote-avatar-shell">
           {tweet.avatarUrl ? (
@@ -134,7 +137,7 @@ function QuotedTweetCard({ tweet }: { tweet: EmbeddedTweet }) {
         </div>
       </div>
 
-      <p className="tweet-card__quote-text">
+      <p className="tweet-card__quote-text tweet-card__quote-text--clamped">
         {renderTweetBody(tweet.body, tweet.bodyHtml)}
       </p>
 
@@ -161,12 +164,45 @@ function MediaGallery({
   isQuoted?: boolean;
 }) {
   const galleryMediaUrls = mediaUrls.slice(0, 4);
+  const [singleAspectRatio, setSingleAspectRatio] = useState<number | null>(
+    null,
+  );
+  const singleImageRef = useRef<HTMLImageElement | null>(null);
+  const layout = getMediaLayout(galleryMediaUrls.length);
+  const isSingleImage = layout === "single";
+  const singleMediaUrl = isSingleImage ? galleryMediaUrls[0] : null;
+
+  useEffect(() => {
+    setSingleAspectRatio(null);
+  }, [singleMediaUrl]);
+
+  useEffect(() => {
+    if (!singleMediaUrl || !singleImageRef.current) {
+      return;
+    }
+
+    updateAspectRatioFromImage(singleImageRef.current, setSingleAspectRatio);
+  }, [singleMediaUrl]);
+
+  const singleImageShellStyle =
+    isSingleImage && singleAspectRatio !== null
+      ? {
+          aspectRatio: `${singleAspectRatio}`,
+          minHeight: 0,
+        }
+      : undefined;
 
   if (!galleryMediaUrls.length) {
     return null;
   }
 
-  const layout = getMediaLayout(galleryMediaUrls.length);
+  function handleImageLoad(event: SyntheticEvent<HTMLImageElement>) {
+    if (!isSingleImage) {
+      return;
+    }
+
+    updateAspectRatioFromImage(event.currentTarget, setSingleAspectRatio);
+  }
 
   return (
     <div
@@ -176,6 +212,7 @@ function MediaGallery({
         <div
           className={`tweet-card__media-shell${layout === "three" && index === 0 ? " tweet-card__media-shell--hero" : ""}`}
           key={`${mediaUrl}-${index}`}
+          style={isSingleImage ? singleImageShellStyle : undefined}
         >
           <img
             className={
@@ -183,11 +220,40 @@ function MediaGallery({
             }
             src={mediaUrl}
             alt={alt}
+            ref={isSingleImage ? singleImageRef : undefined}
+            onLoad={handleImageLoad}
           />
         </div>
       ))}
     </div>
   );
+}
+
+function updateAspectRatioFromImage(
+  image: HTMLImageElement,
+  setAspectRatio: (
+    nextAspectRatio:
+      | number
+      | null
+      | ((current: number | null) => number | null),
+  ) => void,
+) {
+  if (!image.naturalWidth || !image.naturalHeight) {
+    return;
+  }
+
+  const nextAspectRatio = image.naturalWidth / image.naturalHeight;
+
+  setAspectRatio((currentAspectRatio) => {
+    if (
+      currentAspectRatio !== null &&
+      Math.abs(currentAspectRatio - nextAspectRatio) < 0.001
+    ) {
+      return currentAspectRatio;
+    }
+
+    return nextAspectRatio;
+  });
 }
 
 function getMediaLayout(count: number): "single" | "two" | "three" | "four" {

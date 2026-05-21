@@ -5,7 +5,8 @@ import { exportTweetCardToPng } from "./exportPng";
 describe("exportTweetCardToPng", () => {
   it("waits for image decode before exporting so the swap is fully applied", async () => {
     const node = document.createElement("div");
-    node.innerHTML = '<img alt="avatar" src="https://images.example.com/a.jpg">';
+    node.innerHTML =
+      '<img alt="avatar" src="https://images.example.com/a.jpg">';
     document.body.appendChild(node);
 
     const image = node.querySelector("img") as HTMLImageElement;
@@ -282,6 +283,29 @@ describe("exportTweetCardToPng", () => {
       expect.objectContaining({
         canvasWidth: 1080,
         canvasHeight: 1800,
+      }),
+    );
+  });
+
+  it("uses a lower pixel ratio to reduce copy and download image size", async () => {
+    const node = document.createElement("div");
+    const toPng = vi.fn(async () => "data:image/png;base64,abc");
+
+    const result = await exportTweetCardToPng(node, {
+      draft: createEmptyDraft({
+        body: "Launch update",
+      }),
+      toPng,
+    });
+
+    expect(result).toEqual({
+      status: "success",
+      dataUrl: "data:image/png;base64,abc",
+    });
+    expect(toPng).toHaveBeenCalledWith(
+      node,
+      expect.objectContaining({
+        pixelRatio: 1.5,
       }),
     );
   });

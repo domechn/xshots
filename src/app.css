@@ -661,8 +661,9 @@
 }
 
 .tweet-card__text {
-  font-size: clamp(1.15rem, 1.8vw, 1.45rem);
-  line-height: 1.72;
+  font-size: 16px;
+  line-height: 1.5;
+  letter-spacing: 0.4px;
   color: var(--spectral-white);
   white-space: pre-wrap;
 }
@@ -745,6 +746,10 @@
   background: rgba(243, 241, 235, 0.03);
 }
 
+.tweet-card__quote--media {
+  padding-inline: 0.9rem;
+}
+
 .tweet-card__quote-header {
   display: flex;
   align-items: flex-start;
@@ -804,10 +809,21 @@
 }
 
 .tweet-card__quote-text {
-  font-size: 1rem;
-  line-height: 1.6;
+  font-size: 13px;
+  line-height: 1.5;
+  letter-spacing: 0.325px;
   color: var(--spectral-white);
   white-space: pre-wrap;
+}
+
+.tweet-card__quote-text--clamped {
+  display: -webkit-box;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: pre-line;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 5;
+  line-clamp: 5;
 }
 
 .tweet-card__footer {
@@ -899,6 +915,14 @@
     gap: var(--space-4);
     padding: clamp(1rem, 5vw, 1.35rem);
     border-radius: 1.35rem;
+  }
+
+  .tweet-card__quote {
+    padding: 0.85rem 0.9rem;
+  }
+
+  .tweet-card__quote--media {
+    padding-inline: 0.72rem;
   }
 
   .tweet-card__footer {
