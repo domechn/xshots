@@ -11,6 +11,17 @@ type AppProps = {
   importer?: (rawUrl: string) => Promise<TweetImportResult>;
   exporter?: typeof exportTweetCardToPng;
   clipboardWriter?: (dataUrl: string) => Promise<void>;
+  sponsorUnlockEnabled?: boolean;
+};
+
+type SharePngResult = Awaited<ReturnType<typeof exportTweetCardToPng>>;
+type SuccessfulSharePngResult = Extract<SharePngResult, { status: "success" }>;
+type PreparedSharePngResult = SuccessfulSharePngResult & {
+  previewSizeKey: string | null;
+};
+type PendingSharePngRender = {
+  promise: Promise<SharePngResult>;
+  previewSizeKey: string | null;
 };
 
 type OutputAction = "copy" | "export";
@@ -41,8 +52,12 @@ export default function App({
   importer = importTweetFromUrl,
   exporter = exportTweetCardToPng,
   clipboardWriter = copyPngToClipboard,
+  sponsorUnlockEnabled = !import.meta.env.DEV,
 }: AppProps) {
   const previewRef = useRef<HTMLDivElement>(null);
+  const preparedSharePngRef = useRef<PreparedSharePngResult | null>(null);
+  const pendingSharePngRef = useRef<PendingSharePngRender | null>(null);
+  const sharePngRevisionRef = useRef(0);
   const sponsorUnlockExpiresAtRef = useRef<number | null>(null);
   const [tweetUrl, setTweetUrl] = useState("");
   const [draft, setDraft] = useState(INITIAL_DRAFT);
@@ -74,6 +89,59 @@ export default function App({
     };
   }, [status]);
 
+  useEffect(() => {
+    const revision = invalidateSharePngCache();
+
+    if (!draft.sourceUrl || !previewRef.current) {
+      return;
+    }
+
+    const renderPromise = startSharePngRender(revision);
+    void renderPromise.catch(() => undefined);
+
+    return () => {
+      if (
+        sharePngRevisionRef.current === revision &&
+        pendingSharePngRef.current?.promise === renderPromise
+      ) {
+        pendingSharePngRef.current = null;
+      }
+    };
+  }, [draft, exporter]);
+
+  useEffect(() => {
+    if (
+      !draft.sourceUrl ||
+      !previewRef.current ||
+      typeof ResizeObserver === "undefined"
+    ) {
+      return;
+    }
+
+    const node = previewRef.current;
+    let lastPreviewSizeKey = getPreviewSizeKey(node);
+
+    const observer = new ResizeObserver(() => {
+      const nextPreviewSizeKey = getPreviewSizeKey(node);
+
+      if (!nextPreviewSizeKey || nextPreviewSizeKey === lastPreviewSizeKey) {
+        return;
+      }
+
+      lastPreviewSizeKey = nextPreviewSizeKey;
+
+      const revision = invalidateSharePngCache();
+      const renderPromise = startSharePngRender(revision, nextPreviewSizeKey);
+      void renderPromise.catch(() => undefined);
+    });
+
+    observer.observe(node);
+
+    return () => {
+      observer.disconnect();
+    };
+  }, [draft, exporter]);
+
   function showStatus(nextStatus: StatusState) {
     setIsStatusExiting(false);
     setStatus(nextStatus);
@@ -94,6 +162,7 @@ export default function App({
     }
 
     sponsorUnlockExpiresAtRef.current = null;
+    invalidateSharePngCache();
     setIsImporting(true);
     clearStatus();
 
@@ -205,17 +274,84 @@ export default function App({
   }
 
   async function renderSharePng() {
-    if (!previewRef.current) {
-      throw new Error("The preview is not ready yet.");
+    const previewSizeKey = getPreviewSizeKey(previewRef.current);
+
+    if (
+      preparedSharePngRef.current &&
+      preparedSharePngRef.current.previewSizeKey === previewSizeKey
+    ) {
+      return preparedSharePngRef.current;
     }
 
-    return await exporter(previewRef.current, {
+    if (
+      pendingSharePngRef.current &&
+      pendingSharePngRef.current.previewSizeKey === previewSizeKey
+    ) {
+      return await pendingSharePngRef.current.promise;
+    }
+
+    const revision = invalidateSharePngCache();
+
+    return await startSharePngRender(revision, previewSizeKey);
+  }
+
+  function startSharePngRender(
+    revision = sharePngRevisionRef.current,
+    previewSizeKey = getPreviewSizeKey(previewRef.current),
+  ): Promise<SharePngResult> {
+    const previewNode = previewRef.current;
+
+    if (!previewNode) {
+      return Promise.reject(new Error("The preview is not ready yet."));
+    }
+
+    const renderPromise = exporter(previewNode, {
       draft,
       size: "portrait",
-    });
+    })
+      .then((result) => {
+        if (
+          sharePngRevisionRef.current === revision &&
+          result.status === "success"
+        ) {
+          preparedSharePngRef.current = {
+            ...result,
+            previewSizeKey,
+          };
+        }
+
+        return result;
+      })
+      .finally(() => {
+        if (
+          sharePngRevisionRef.current === revision &&
+          pendingSharePngRef.current?.promise === renderPromise
+        ) {
+          pendingSharePngRef.current = null;
+        }
+      });
+
+    pendingSharePngRef.current = {
+      promise: renderPromise,
+      previewSizeKey,
+    };
+
+    return renderPromise;
+  }
+
+  function invalidateSharePngCache() {
+    sharePngRevisionRef.current += 1;
+    preparedSharePngRef.current = null;
+    pendingSharePngRef.current = null;
+
+    return sharePngRevisionRef.current;
   }
 
   function ensureSponsorUnlock(action: OutputAction) {
+    if (!sponsorUnlockEnabled) {
+      return true;
+    }
+
     const now = Date.now();
 
     if ((sponsorUnlockExpiresAtRef.current ?? 0) > now) {
@@ -232,7 +368,8 @@ export default function App({
     return false;
   }
 
-  const isOutputDisabled = !draft.sourceUrl || isExporting || isCopying;
+  const isOutputDisabled =
+    !draft.sourceUrl || isImporting || isExporting || isCopying;
 
   return (
     <main className="app-shell app-shell--minimal">
@@ -312,11 +449,13 @@ export default function App({
                       onClick={handleExport}
                       disabled={isOutputDisabled}
                     >
-                      {isExporting ? "Rendering…" : "Export PNG"}
+                      {isExporting ? "Exporting…" : "Export PNG"}
                     </button>
                   </div>
                   <p className="preview-panel__copy preview-panel__copy--actions">
-                    First click opens sponsor tab. Click again to finish.
+                    {sponsorUnlockEnabled
+                      ? "First click opens sponsor tab. Click again to finish."
+                      : "Development mode: sponsor tab is disabled."}
                   </p>
                 </div>
               </div>
@@ -330,8 +469,9 @@ export default function App({
           </section>
           <footer className="app-footer">
             <p className="privacy-note">
-              Copy and export open a sponsor link in a new tab. No account
-              required.{" "}
+              {sponsorUnlockEnabled
+                ? "Copy and export open a sponsor link in a new tab. No account required."
+                : "Development mode: sponsor link is disabled for copy and export."}{" "}
               <a href="/privacy.html" className="app-link">
                 Privacy Policy
               </a>
@@ -424,4 +564,19 @@ async function copyPngToClipboard(dataUrl: string) {
       [blob.type || "image/png"]: blob,
     }),
   ]);
+}
+
+function getPreviewSizeKey(node: HTMLElement | null): string | null {
+  if (!node) {
+    return null;
+  }
+
+  const width = node.offsetWidth || node.getBoundingClientRect().width;
+  const height = node.offsetHeight || node.getBoundingClientRect().height;
+
+  if (!width || !height) {
+    return null;
+  }
+
+  return `${Math.round(width)}x${Math.round(height)}`;
 }

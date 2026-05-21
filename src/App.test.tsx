@@ -1,4 +1,11 @@
-import { act, fireEvent, render, screen, within } from "@testing-library/react";
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import App from "./App";
@@ -7,6 +14,70 @@ afterEach(() => {
   vi.useRealTimers();
   vi.restoreAllMocks();
 });
+
+function installResizeObserverMock() {
+  const callbacksByTarget = new Map<Element, Set<ResizeObserverCallback>>();
+  const originalResizeObserver = globalThis.ResizeObserver;
+
+  class ResizeObserverMock implements ResizeObserver {
+    constructor(private readonly callback: ResizeObserverCallback) {}
+
+    observe(target: Element) {
+      const callbacks = callbacksByTarget.get(target) ?? new Set();
+      callbacks.add(this.callback);
+      callbacksByTarget.set(target, callbacks);
+    }
+
+    unobserve(target: Element) {
+      callbacksByTarget.get(target)?.delete(this.callback);
+    }
+
+    disconnect() {
+      for (const callbacks of callbacksByTarget.values()) {
+        callbacks.delete(this.callback);
+      }
+    }
+  }
+
+  Object.defineProperty(globalThis, "ResizeObserver", {
+    configurable: true,
+    writable: true,
+    value: ResizeObserverMock,
+  });
+
+  return {
+    isObserving(target: Element) {
+      return (callbacksByTarget.get(target)?.size ?? 0) > 0;
+    },
+    trigger(target: Element) {
+      const callbacks = callbacksByTarget.get(target);
+
+      if (!callbacks?.size) {
+        return;
+      }
+
+      const rect = target.getBoundingClientRect();
+      const entry = {
+        target,
+        contentRect: rect,
+        borderBoxSize: [],
+        contentBoxSize: [],
+        devicePixelContentBoxSize: [],
+      } as ResizeObserverEntry;
+
+      for (const callback of callbacks) {
+        callback([entry], {} as ResizeObserver);
+      }
+    },
+    restore() {
+      Object.defineProperty(globalThis, "ResizeObserver", {
+        configurable: true,
+        writable: true,
+        value: originalResizeObserver,
+      });
+    },
+  };
+}
 
 describe("App", () => {
   it("renders a minimal import and preview layout", () => {
@@ -44,7 +115,7 @@ describe("App", () => {
   });
 
   it("renders sponsor disclosure without inline advertisement slots", () => {
-    render(<App />);
+    render(<App sponsorUnlockEnabled />);
 
     expect(screen.queryByLabelText("Advertisement")).not.toBeInTheDocument();
     expect(
@@ -152,6 +223,226 @@ describe("App", () => {
     expect(screen.getByText(/fill in the tweet manually/i)).toBeInTheDocument();
   });
 
+  it("prepares the share image after import and reuses it for clipboard copy", async () => {
+    const user = userEvent.setup();
+    const importer = vi.fn().mockResolvedValue({
+      status: "success",
+      draft: {
+        sourceUrl: "https://x.com/SpaceX/status/1915324363727337943",
+        authorName: "SpaceX",
+        handle: "SpaceX",
+        body: "Clipboard ready.",
+        bodyHtml: "",
+        timestampLabel: "April 23, 2026",
+        avatarUrl: "",
+        mediaUrl: "",
+        mediaUrls: [],
+        verified: true,
+        themeVariant: "orbital",
+        quotedTweet: null,
+        replyCount: null,
+        repostCount: null,
+        likeCount: null,
+        bookmarkCount: null,
+      },
+    });
+    const exporter = vi.fn().mockResolvedValue({
+      status: "success",
+      dataUrl: "data:image/png;base64,Zm9v",
+    });
+    const clipboardWriter = vi.fn().mockResolvedValue(undefined);
+
+    render(
+      <App
+        importer={importer}
+        exporter={exporter}
+        clipboardWriter={clipboardWriter}
+        sponsorUnlockEnabled={false}
+      />,
+    );
+
+    await user.type(
+      screen.getByLabelText("Tweet link"),
+      "https://x.com/SpaceX/status/1915324363727337943",
+    );
+    await user.click(screen.getByRole("button", { name: "Import tweet" }));
+
+    await within(screen.getByLabelText("Tweet preview card")).findByText(
+      "Clipboard ready.",
+    );
+
+    await waitFor(() => {
+      expect(exporter).toHaveBeenCalledTimes(1);
+    });
+
+    await user.click(screen.getByRole("button", { name: "Copy to clipboard" }));
+
+    expect(exporter).toHaveBeenCalledTimes(1);
+    expect(clipboardWriter).toHaveBeenCalledWith("data:image/png;base64,Zm9v");
+  });
+
+  it("prepares the share image after import and reuses it for PNG export", async () => {
+    const user = userEvent.setup();
+    const importer = vi.fn().mockResolvedValue({
+      status: "success",
+      draft: {
+        sourceUrl: "https://x.com/SpaceX/status/1915324363727337943",
+        authorName: "SpaceX",
+        handle: "SpaceX",
+        body: "Export ready.",
+        bodyHtml: "",
+        timestampLabel: "April 23, 2026",
+        avatarUrl: "",
+        mediaUrl: "",
+        mediaUrls: [],
+        verified: true,
+        themeVariant: "orbital",
+        quotedTweet: null,
+        replyCount: null,
+        repostCount: null,
+        likeCount: null,
+        bookmarkCount: null,
+      },
+    });
+    const exporter = vi.fn().mockResolvedValue({
+      status: "success",
+      dataUrl: "data:image/png;base64,Zm9v",
+    });
+    const createObjectUrlSpy = vi
+      .spyOn(URL, "createObjectURL")
+      .mockReturnValue("blob:mock-object-url");
+    vi.spyOn(URL, "revokeObjectURL").mockImplementation(() => undefined);
+
+    render(
+      <App
+        importer={importer}
+        exporter={exporter}
+        sponsorUnlockEnabled={false}
+      />,
+    );
+
+    await user.type(
+      screen.getByLabelText("Tweet link"),
+      "https://x.com/SpaceX/status/1915324363727337943",
+    );
+    await user.click(screen.getByRole("button", { name: "Import tweet" }));
+
+    await within(screen.getByLabelText("Tweet preview card")).findByText(
+      "Export ready.",
+    );
+
+    await waitFor(() => {
+      expect(exporter).toHaveBeenCalledTimes(1);
+    });
+
+    await user.click(screen.getByRole("button", { name: "Export PNG" }));
+
+    expect(exporter).toHaveBeenCalledTimes(1);
+    expect(createObjectUrlSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it("refreshes the prepared share image when the preview height changes", async () => {
+    const resizeObserver = installResizeObserverMock();
+    const user = userEvent.setup();
+    const importer = vi.fn().mockResolvedValue({
+      status: "success",
+      draft: {
+        sourceUrl: "https://x.com/SpaceX/status/1915324363727337943",
+        authorName: "SpaceX",
+        handle: "SpaceX",
+        body: "Export ready.",
+        bodyHtml: "",
+        timestampLabel: "April 23, 2026",
+        avatarUrl: "",
+        mediaUrl: "",
+        mediaUrls: [],
+        verified: true,
+        themeVariant: "orbital",
+        quotedTweet: null,
+        replyCount: null,
+        repostCount: null,
+        likeCount: null,
+        bookmarkCount: null,
+      },
+    });
+    const exporter = vi.fn(async (node: HTMLElement) => ({
+      status: "success" as const,
+      dataUrl:
+        node.offsetHeight >= 1200
+          ? "data:image/png;base64,c2Vjb25k"
+          : "data:image/png;base64,Zmlyc3Q=",
+    }));
+    const clipboardWriter = vi.fn().mockResolvedValue(undefined);
+    const { container } = render(
+      <App
+        importer={importer}
+        exporter={exporter}
+        clipboardWriter={clipboardWriter}
+        sponsorUnlockEnabled={false}
+      />,
+    );
+
+    const capture = container.querySelector(".preview-stage__capture");
+
+    if (!(capture instanceof HTMLDivElement)) {
+      throw new Error("Expected preview capture node.");
+    }
+
+    let previewWidth = 540;
+    let previewHeight = 900;
+
+    Object.defineProperty(capture, "offsetWidth", {
+      configurable: true,
+      get: () => previewWidth,
+    });
+    Object.defineProperty(capture, "offsetHeight", {
+      configurable: true,
+      get: () => previewHeight,
+    });
+    capture.getBoundingClientRect = () => ({
+      width: previewWidth,
+      height: previewHeight,
+      top: 0,
+      left: 0,
+      right: previewWidth,
+      bottom: previewHeight,
+      x: 0,
+      y: 0,
+      toJSON: () => ({}),
+    });
+
+    try {
+      await user.type(
+        screen.getByLabelText("Tweet link"),
+        "https://x.com/SpaceX/status/1915324363727337943",
+      );
+      await user.click(screen.getByRole("button", { name: "Import tweet" }));
+
+      await waitFor(() => {
+        expect(exporter).toHaveBeenCalledTimes(1);
+        expect(resizeObserver.isObserving(capture)).toBe(true);
+      });
+
+      previewHeight = 1200;
+      resizeObserver.trigger(capture);
+
+      await waitFor(() => {
+        expect(exporter).toHaveBeenCalledTimes(2);
+      });
+
+      await user.click(
+        screen.getByRole("button", { name: "Copy to clipboard" }),
+      );
+
+      expect(exporter).toHaveBeenCalledTimes(2);
+      expect(clipboardWriter).toHaveBeenCalledWith(
+        "data:image/png;base64,c2Vjb25k",
+      );
+    } finally {
+      resizeObserver.restore();
+    }
+  });
+
   it("opens a sponsor tab before allowing clipboard copy", async () => {
     const user = userEvent.setup();
     const importer = vi.fn().mockResolvedValue({
@@ -180,6 +471,7 @@ describe("App", () => {
         importer={importer}
         exporter={exporter}
         clipboardWriter={clipboardWriter}
+        sponsorUnlockEnabled
       />,
     );
 
@@ -188,6 +480,11 @@ describe("App", () => {
       "https://x.com/SpaceX/status/1915324363727337943",
     );
     await user.click(screen.getByRole("button", { name: "Import tweet" }));
+
+    await waitFor(() => {
+      expect(exporter).toHaveBeenCalledTimes(1);
+    });
+
     await user.click(screen.getByRole("button", { name: "Copy to clipboard" }));
 
     expect(openSpy).toHaveBeenCalledWith(
@@ -195,7 +492,7 @@ describe("App", () => {
       "_blank",
       "noopener,noreferrer",
     );
-    expect(exporter).not.toHaveBeenCalled();
+    expect(exporter).toHaveBeenCalledTimes(1);
     expect(clipboardWriter).not.toHaveBeenCalled();
     expect(screen.getByRole("status")).toHaveTextContent(
       "Sponsor link opened in a new tab. Return here and press Copy to clipboard again to continue.",
@@ -229,13 +526,20 @@ describe("App", () => {
     });
     const openSpy = vi.spyOn(window, "open").mockReturnValue(null);
 
-    render(<App importer={importer} exporter={exporter} />);
+    render(
+      <App importer={importer} exporter={exporter} sponsorUnlockEnabled />,
+    );
 
     await user.type(
       screen.getByLabelText("Tweet link"),
       "https://x.com/SpaceX/status/1915324363727337943",
     );
     await user.click(screen.getByRole("button", { name: "Import tweet" }));
+
+    await waitFor(() => {
+      expect(exporter).toHaveBeenCalledTimes(1);
+    });
+
     await user.click(screen.getByRole("button", { name: "Export PNG" }));
 
     expect(openSpy).toHaveBeenCalledWith(
@@ -243,7 +547,7 @@ describe("App", () => {
       "_blank",
       "noopener,noreferrer",
     );
-    expect(exporter).not.toHaveBeenCalled();
+    expect(exporter).toHaveBeenCalledTimes(1);
     expect(screen.getByRole("status")).toHaveTextContent(
       "Sponsor link opened in a new tab. Return here and press Export PNG again to continue.",
     );
@@ -288,7 +592,9 @@ describe("App", () => {
       wasConnected: boolean;
     }> = [];
     const originalClick = HTMLAnchorElement.prototype.click;
-    HTMLAnchorElement.prototype.click = function recordClick(this: HTMLAnchorElement) {
+    HTMLAnchorElement.prototype.click = function recordClick(
+      this: HTMLAnchorElement,
+    ) {
       anchorClicks.push({
         href: this.href,
         download: this.download,
@@ -297,7 +603,9 @@ describe("App", () => {
     };
 
     try {
-      render(<App importer={importer} exporter={exporter} />);
+      render(
+        <App importer={importer} exporter={exporter} sponsorUnlockEnabled />,
+      );
 
       await user.type(
         screen.getByLabelText("Tweet link"),
@@ -315,9 +623,7 @@ describe("App", () => {
 
       expect(anchorClicks).toHaveLength(1);
       expect(anchorClicks[0].href).toBe("blob:mock-object-url");
-      expect(anchorClicks[0].download).toBe(
-        "tweet-1915324363727337943.png",
-      );
+      expect(anchorClicks[0].download).toBe("tweet-1915324363727337943.png");
       // The anchor must be in the DOM at click time for mobile browsers.
       expect(anchorClicks[0].wasConnected).toBe(true);
 
@@ -371,5 +677,49 @@ describe("App", () => {
     });
 
     expect(screen.queryByRole("status")).not.toBeInTheDocument();
+  });
+
+  it("skips sponsor redirect when sponsor unlock is disabled", async () => {
+    const user = userEvent.setup();
+    const importer = vi.fn().mockResolvedValue({
+      status: "success",
+      draft: {
+        sourceUrl: "https://x.com/SpaceX/status/1915324363727337943",
+        authorName: "SpaceX",
+        handle: "SpaceX",
+        body: "Clipboard ready.",
+        timestampLabel: "April 23, 2026",
+        avatarUrl: "",
+        mediaUrl: "",
+        verified: true,
+        themeVariant: "orbital",
+      },
+    });
+    const exporter = vi.fn().mockResolvedValue({
+      status: "success",
+      dataUrl: "data:image/png;base64,Zm9v",
+    });
+    const clipboardWriter = vi.fn().mockResolvedValue(undefined);
+    const openSpy = vi.spyOn(window, "open").mockReturnValue(null);
+
+    render(
+      <App
+        importer={importer}
+        exporter={exporter}
+        clipboardWriter={clipboardWriter}
+        sponsorUnlockEnabled={false}
+      />,
+    );
+
+    await user.type(
+      screen.getByLabelText("Tweet link"),
+      "https://x.com/SpaceX/status/1915324363727337943",
+    );
+    await user.click(screen.getByRole("button", { name: "Import tweet" }));
+    await user.click(screen.getByRole("button", { name: "Copy to clipboard" }));
+
+    expect(openSpy).not.toHaveBeenCalled();
+    expect(exporter).toHaveBeenCalledTimes(1);
+    expect(clipboardWriter).toHaveBeenCalledWith("data:image/png;base64,Zm9v");
   });
 });
