@@ -24,6 +24,7 @@ const EXPORT_SIZES: Record<ExportSizeKey, { width: number; height: number }> = {
   portrait: { width: 1080, height: 1350 },
 };
 const EXPORT_PIXEL_RATIO = 1.5;
+const decodedImages = new WeakSet<HTMLImageElement>();
 
 export async function exportTweetCardToPng(
   node: HTMLElement,
@@ -65,6 +66,8 @@ export async function exportTweetCardToPng(
   const restoreImages = await swapInlineAssetUrls(node, resolvedAssets);
 
   try {
+    await waitForRenderedImages(node);
+
     const dataUrl = await toPng(node, {
       cacheBust: true,
       pixelRatio: EXPORT_PIXEL_RATIO,
@@ -80,6 +83,42 @@ export async function exportTweetCardToPng(
   } finally {
     restoreImages();
   }
+}
+
+async function waitForRenderedImages(node: HTMLElement): Promise<void> {
+  const images = Array.from(node.querySelectorAll("img"));
+
+  await Promise.all(images.map(waitForImageDecode));
+  await waitForNextPaint();
+}
+
+async function waitForImageDecode(image: HTMLImageElement): Promise<void> {
+  if (decodedImages.has(image)) {
+    return;
+  }
+
+  if (typeof image.decode !== "function") {
+    return;
+  }
+
+  try {
+    await image.decode();
+    decodedImages.add(image);
+  } catch {
+    // Keep exporting if decode() rejects; broken images are handled by the
+    // browser exactly as they are rendered in the preview.
+  }
+}
+
+async function waitForNextPaint(): Promise<void> {
+  await new Promise<void>((resolve) => {
+    if (typeof window.requestAnimationFrame !== "function") {
+      window.setTimeout(resolve, 0);
+      return;
+    }
+
+    window.requestAnimationFrame(() => resolve());
+  });
 }
 
 function resolveCanvasSize(
@@ -261,6 +300,7 @@ async function setImageSource(
   if (typeof image.decode === "function") {
     try {
       await image.decode();
+      decodedImages.add(image);
       return;
     } catch {
       // Fall back to the load/error listeners below if decode() rejects.
@@ -288,6 +328,8 @@ async function setImageSource(
     // Safety net so we never hang if neither event fires.
     const timeoutId = window.setTimeout(finish, 5000);
   });
+
+  decodedImages.add(image);
 }
 
 async function blobToDataUrl(blob: Blob): Promise<string> {

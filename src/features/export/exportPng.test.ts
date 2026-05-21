@@ -58,6 +58,73 @@ describe("exportTweetCardToPng", () => {
     document.body.removeChild(node);
   });
 
+  it("waits for a paint frame after inlined images decode before exporting", async () => {
+    const node = document.createElement("div");
+    node.innerHTML =
+      '<img alt="media" src="https://images.example.com/media.jpg">';
+    document.body.appendChild(node);
+
+    const image = node.querySelector("img") as HTMLImageElement;
+    (image as { decode?: () => Promise<void> }).decode = async () => undefined;
+
+    const pendingFrame = {
+      callback: null as FrameRequestCallback | null,
+    };
+    const originalRequestAnimationFrame = window.requestAnimationFrame;
+    const originalCancelAnimationFrame = window.cancelAnimationFrame;
+
+    Object.defineProperty(window, "requestAnimationFrame", {
+      configurable: true,
+      value: (callback: FrameRequestCallback) => {
+        pendingFrame.callback = callback;
+        return 1;
+      },
+    });
+    Object.defineProperty(window, "cancelAnimationFrame", {
+      configurable: true,
+      value: vi.fn(),
+    });
+
+    const toPng = vi.fn(async () => "data:image/png;base64,abc");
+
+    try {
+      const exportPromise = exportTweetCardToPng(node, {
+        draft: createEmptyDraft({
+          mediaUrl: "https://images.example.com/media.jpg",
+        }),
+        resolveAssetUrl: async () => "data:image/png;base64,media",
+        toPng,
+      } as never);
+
+      await new Promise((resolve) => setTimeout(resolve, 0));
+
+      expect(toPng).not.toHaveBeenCalled();
+      expect(pendingFrame.callback).not.toBeNull();
+
+      if (!pendingFrame.callback) {
+        throw new Error("Expected export to wait for requestAnimationFrame.");
+      }
+
+      pendingFrame.callback(performance.now());
+
+      await expect(exportPromise).resolves.toEqual({
+        status: "success",
+        dataUrl: "data:image/png;base64,abc",
+      });
+      expect(toPng).toHaveBeenCalledOnce();
+    } finally {
+      Object.defineProperty(window, "requestAnimationFrame", {
+        configurable: true,
+        value: originalRequestAnimationFrame,
+      });
+      Object.defineProperty(window, "cancelAnimationFrame", {
+        configurable: true,
+        value: originalCancelAnimationFrame,
+      });
+      document.body.removeChild(node);
+    }
+  });
+
   it("blocks export when a remote asset cannot be verified for browser-safe export", async () => {
     const node = document.createElement("div");
     const toPng = vi.fn();
