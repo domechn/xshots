@@ -457,20 +457,6 @@
   font-size: 1.3rem;
 }
 
-.preview-panel__copy {
-  margin: 0.4rem 0 0;
-  max-width: 26rem;
-  color: rgba(243, 241, 235, 0.62);
-  line-height: 1.6;
-}
-
-.preview-panel__copy--actions {
-  margin: 0;
-  max-width: none;
-  text-align: right;
-  white-space: nowrap;
-}
-
 .preview-stage {
   position: relative;
   z-index: 1;
@@ -899,12 +885,6 @@
 
   .preview-panel__actions {
     justify-items: stretch;
-  }
-
-  .preview-panel__copy--actions {
-    max-width: none;
-    text-align: left;
-    white-space: normal;
   }
 
   .button--compact {

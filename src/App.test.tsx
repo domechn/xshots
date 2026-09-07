@@ -114,14 +114,13 @@ describe("App", () => {
     ).not.toBeInTheDocument();
   });
 
-  it("renders sponsor disclosure without inline advertisement slots", () => {
-    render(<App sponsorUnlockEnabled />);
+  it("renders no advertisement or sponsor content", () => {
+    render(<App />);
 
     expect(screen.queryByLabelText("Advertisement")).not.toBeInTheDocument();
+    expect(screen.queryByText(/sponsor/i)).not.toBeInTheDocument();
     expect(
-      screen.getByText(
-        "Copy and export open a sponsor link in a new tab. No account required.",
-      ),
+      screen.getByText("No account required.", { exact: false }),
     ).toBeInTheDocument();
   });
 
@@ -257,7 +256,6 @@ describe("App", () => {
         importer={importer}
         exporter={exporter}
         clipboardWriter={clipboardWriter}
-        sponsorUnlockEnabled={false}
       />,
     );
 
@@ -335,7 +333,6 @@ describe("App", () => {
         <App
           importer={importer}
           exporter={exporter}
-          sponsorUnlockEnabled={false}
         />,
       );
 
@@ -410,7 +407,6 @@ describe("App", () => {
       <App
         importer={importer}
         exporter={exporter}
-        sponsorUnlockEnabled={false}
       />,
     );
 
@@ -471,7 +467,6 @@ describe("App", () => {
         importer={importer}
         exporter={exporter}
         clipboardWriter={clipboardWriter}
-        sponsorUnlockEnabled={false}
       />,
     );
 
@@ -536,120 +531,6 @@ describe("App", () => {
     }
   });
 
-  it("opens a sponsor tab before allowing clipboard copy", async () => {
-    const user = userEvent.setup();
-    const importer = vi.fn().mockResolvedValue({
-      status: "success",
-      draft: {
-        sourceUrl: "https://x.com/SpaceX/status/1915324363727337943",
-        authorName: "SpaceX",
-        handle: "SpaceX",
-        body: "Clipboard ready.",
-        timestampLabel: "April 23, 2026",
-        avatarUrl: "",
-        mediaUrl: "",
-        verified: true,
-        themeVariant: "orbital",
-      },
-    });
-    const exporter = vi.fn().mockResolvedValue({
-      status: "success",
-      dataUrl: "data:image/png;base64,Zm9v",
-    });
-    const clipboardWriter = vi.fn().mockResolvedValue(undefined);
-    const openSpy = vi.spyOn(window, "open").mockReturnValue(null);
-
-    render(
-      <App
-        importer={importer}
-        exporter={exporter}
-        clipboardWriter={clipboardWriter}
-        sponsorUnlockEnabled
-      />,
-    );
-
-    await user.type(
-      screen.getByLabelText("Tweet link"),
-      "https://x.com/SpaceX/status/1915324363727337943",
-    );
-    await user.click(screen.getByRole("button", { name: "Import tweet" }));
-
-    await waitFor(() => {
-      expect(exporter).toHaveBeenCalledTimes(1);
-    });
-
-    await user.click(screen.getByRole("button", { name: "Copy to clipboard" }));
-
-    expect(openSpy).toHaveBeenCalledWith(
-      "https://plump-plastic.com/b.3qVK0vPn3rppveb/m/VDJEZvDP0/3cMZDjUJ1sOfTmEdz/LOTNchwhNwTzU-5/MZT/cp",
-      "_blank",
-      "noopener,noreferrer",
-    );
-    expect(exporter).toHaveBeenCalledTimes(1);
-    expect(clipboardWriter).not.toHaveBeenCalled();
-    expect(screen.getByRole("status")).toHaveTextContent(
-      "Sponsor link opened in a new tab. Return here and press Copy to clipboard again to continue.",
-    );
-
-    await user.click(screen.getByRole("button", { name: "Copy to clipboard" }));
-
-    expect(exporter).toHaveBeenCalledTimes(1);
-    expect(clipboardWriter).toHaveBeenCalledWith("data:image/png;base64,Zm9v");
-  });
-
-  it("opens a sponsor tab before allowing PNG export", async () => {
-    const user = userEvent.setup();
-    const importer = vi.fn().mockResolvedValue({
-      status: "success",
-      draft: {
-        sourceUrl: "https://x.com/SpaceX/status/1915324363727337943",
-        authorName: "SpaceX",
-        handle: "SpaceX",
-        body: "Export ready.",
-        timestampLabel: "April 23, 2026",
-        avatarUrl: "",
-        mediaUrl: "",
-        verified: true,
-        themeVariant: "orbital",
-      },
-    });
-    const exporter = vi.fn().mockResolvedValue({
-      status: "success",
-      dataUrl: "data:image/png;base64,Zm9v",
-    });
-    const openSpy = vi.spyOn(window, "open").mockReturnValue(null);
-
-    render(
-      <App importer={importer} exporter={exporter} sponsorUnlockEnabled />,
-    );
-
-    await user.type(
-      screen.getByLabelText("Tweet link"),
-      "https://x.com/SpaceX/status/1915324363727337943",
-    );
-    await user.click(screen.getByRole("button", { name: "Import tweet" }));
-
-    await waitFor(() => {
-      expect(exporter).toHaveBeenCalledTimes(1);
-    });
-
-    await user.click(screen.getByRole("button", { name: "Export PNG" }));
-
-    expect(openSpy).toHaveBeenCalledWith(
-      "https://plump-plastic.com/b.3qVK0vPn3rppveb/m/VDJEZvDP0/3cMZDjUJ1sOfTmEdz/LOTNchwhNwTzU-5/MZT/cp",
-      "_blank",
-      "noopener,noreferrer",
-    );
-    expect(exporter).toHaveBeenCalledTimes(1);
-    expect(screen.getByRole("status")).toHaveTextContent(
-      "Sponsor link opened in a new tab. Return here and press Export PNG again to continue.",
-    );
-
-    await user.click(screen.getByRole("button", { name: "Export PNG" }));
-
-    expect(exporter).toHaveBeenCalledTimes(1);
-  });
-
   it("downloads the exported PNG via an object URL appended to the document", async () => {
     const user = userEvent.setup();
     const importer = vi.fn().mockResolvedValue({
@@ -670,7 +551,6 @@ describe("App", () => {
       status: "success",
       dataUrl: "data:image/png;base64,Zm9v",
     });
-    vi.spyOn(window, "open").mockReturnValue(null);
 
     const createObjectUrlSpy = vi
       .spyOn(URL, "createObjectURL")
@@ -696,16 +576,13 @@ describe("App", () => {
     };
 
     try {
-      render(
-        <App importer={importer} exporter={exporter} sponsorUnlockEnabled />,
-      );
+      render(<App importer={importer} exporter={exporter} />);
 
       await user.type(
         screen.getByLabelText("Tweet link"),
         "https://x.com/SpaceX/status/1915324363727337943",
       );
       await user.click(screen.getByRole("button", { name: "Import tweet" }));
-      await user.click(screen.getByRole("button", { name: "Export PNG" }));
       await user.click(screen.getByRole("button", { name: "Export PNG" }));
 
       expect(exporter).toHaveBeenCalledTimes(1);
@@ -770,49 +647,5 @@ describe("App", () => {
     });
 
     expect(screen.queryByRole("status")).not.toBeInTheDocument();
-  });
-
-  it("skips sponsor redirect when sponsor unlock is disabled", async () => {
-    const user = userEvent.setup();
-    const importer = vi.fn().mockResolvedValue({
-      status: "success",
-      draft: {
-        sourceUrl: "https://x.com/SpaceX/status/1915324363727337943",
-        authorName: "SpaceX",
-        handle: "SpaceX",
-        body: "Clipboard ready.",
-        timestampLabel: "April 23, 2026",
-        avatarUrl: "",
-        mediaUrl: "",
-        verified: true,
-        themeVariant: "orbital",
-      },
-    });
-    const exporter = vi.fn().mockResolvedValue({
-      status: "success",
-      dataUrl: "data:image/png;base64,Zm9v",
-    });
-    const clipboardWriter = vi.fn().mockResolvedValue(undefined);
-    const openSpy = vi.spyOn(window, "open").mockReturnValue(null);
-
-    render(
-      <App
-        importer={importer}
-        exporter={exporter}
-        clipboardWriter={clipboardWriter}
-        sponsorUnlockEnabled={false}
-      />,
-    );
-
-    await user.type(
-      screen.getByLabelText("Tweet link"),
-      "https://x.com/SpaceX/status/1915324363727337943",
-    );
-    await user.click(screen.getByRole("button", { name: "Import tweet" }));
-    await user.click(screen.getByRole("button", { name: "Copy to clipboard" }));
-
-    expect(openSpy).not.toHaveBeenCalled();
-    expect(exporter).toHaveBeenCalledTimes(1);
-    expect(clipboardWriter).toHaveBeenCalledWith("data:image/png;base64,Zm9v");
   });
 });
