@@ -11,7 +11,6 @@ type AppProps = {
   importer?: (rawUrl: string) => Promise<TweetImportResult>;
   exporter?: typeof exportTweetCardToPng;
   clipboardWriter?: (dataUrl: string) => Promise<void>;
-  sponsorUnlockEnabled?: boolean;
 };
 
 type SharePngResult = Awaited<ReturnType<typeof exportTweetCardToPng>>;
@@ -24,7 +23,6 @@ type PendingSharePngRender = {
   previewSizeKey: string | null;
 };
 
-type OutputAction = "copy" | "export";
 type StatusTone = "success" | "warning" | "error";
 type StatusState = {
   tone: StatusTone;
@@ -40,25 +38,15 @@ const INITIAL_DRAFT = createEmptyDraft({
   themeVariant: "orbital",
 });
 
-const SPONSOR_URL =
-  "https://plump-plastic.com/b.3qVK0vPn3rppveb/m/VDJEZvDP0/3cMZDjUJ1sOfTmEdz/LOTNchwhNwTzU-5/MZT/cp";
-const SPONSOR_UNLOCK_WINDOW_MS = 45_000;
-const OUTPUT_ACTION_LABELS: Record<OutputAction, string> = {
-  copy: "Copy to clipboard",
-  export: "Export PNG",
-};
-
 export default function App({
   importer = importTweetFromUrl,
   exporter = exportTweetCardToPng,
   clipboardWriter = copyPngToClipboard,
-  sponsorUnlockEnabled = !import.meta.env.DEV,
 }: AppProps) {
   const previewRef = useRef<HTMLDivElement>(null);
   const preparedSharePngRef = useRef<PreparedSharePngResult | null>(null);
   const pendingSharePngRef = useRef<PendingSharePngRender | null>(null);
   const sharePngRevisionRef = useRef(0);
-  const sponsorUnlockExpiresAtRef = useRef<number | null>(null);
   const [tweetUrl, setTweetUrl] = useState("");
   const [draft, setDraft] = useState(INITIAL_DRAFT);
   const [status, setStatus] = useState<StatusState | null>(null);
@@ -161,7 +149,6 @@ export default function App({
       return;
     }
 
-    sponsorUnlockExpiresAtRef.current = null;
     invalidateSharePngCache();
     setIsImporting(true);
     clearStatus();
@@ -202,10 +189,6 @@ export default function App({
   }
 
   async function handleExport() {
-    if (!ensureSponsorUnlock("export")) {
-      return;
-    }
-
     setIsExporting(true);
     clearStatus();
 
@@ -237,10 +220,6 @@ export default function App({
   }
 
   async function handleCopyToClipboard() {
-    if (!ensureSponsorUnlock("copy")) {
-      return;
-    }
-
     setIsCopying(true);
     clearStatus();
 
@@ -347,27 +326,6 @@ export default function App({
     return sharePngRevisionRef.current;
   }
 
-  function ensureSponsorUnlock(action: OutputAction) {
-    if (!sponsorUnlockEnabled) {
-      return true;
-    }
-
-    const now = Date.now();
-
-    if ((sponsorUnlockExpiresAtRef.current ?? 0) > now) {
-      return true;
-    }
-
-    sponsorUnlockExpiresAtRef.current = now + SPONSOR_UNLOCK_WINDOW_MS;
-    window.open(SPONSOR_URL, "_blank", "noopener,noreferrer");
-    showStatus({
-      tone: "warning",
-      message: `Sponsor link opened in a new tab. Return here and press ${OUTPUT_ACTION_LABELS[action]} again to continue.`,
-    });
-
-    return false;
-  }
-
   const isOutputDisabled =
     !draft.sourceUrl || isImporting || isExporting || isCopying;
 
@@ -452,11 +410,6 @@ export default function App({
                       {isExporting ? "Exporting…" : "Export PNG"}
                     </button>
                   </div>
-                  <p className="preview-panel__copy preview-panel__copy--actions">
-                    {sponsorUnlockEnabled
-                      ? "First click opens sponsor tab. Click again to finish."
-                      : "Development mode: sponsor tab is disabled."}
-                  </p>
                 </div>
               </div>
 
@@ -469,9 +422,7 @@ export default function App({
           </section>
           <footer className="app-footer">
             <p className="privacy-note">
-              {sponsorUnlockEnabled
-                ? "Copy and export open a sponsor link in a new tab. No account required."
-                : "Development mode: sponsor link is disabled for copy and export."}{" "}
+              No account required.{" "}
               <a href="/privacy.html" className="app-link">
                 Privacy Policy
               </a>
