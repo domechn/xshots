@@ -1,5 +1,0 @@
-User-agent: *
-Allow: /
-Disallow: /privacy.html
-
-Sitemap: https://xshots.domc.me/sitemap.xml
