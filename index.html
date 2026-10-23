@@ -4,35 +4,38 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="robots" content="index, follow" />
-    <meta name="googlebot" content="index, follow" />
-    <link rel="canonical" href="https://xshots.domc.me" />
+    <meta name="theme-color" content="#05070a" />
+    <link rel="canonical" href="https://xshots.domc.me/" />
 
-    <title>XShots — Tweet to PNG Screenshot Generator, Free & Clean</title>
+    <title>XShots: Tweet to Image &amp; X Post to PNG Screenshot</title>
     <meta
       name="description"
-      content="Paste an X or Twitter URL to preview and export a clean share image. Free, browser-based, no upload required."
-    />
-    <meta
-      name="keywords"
-      content="tweet to image, tweet screenshot, X screenshot, Twitter to PNG, tweet card generator, share tweet image"
+      content="Turn any tweet or X post into a clean PNG screenshot. Paste an x.com or twitter.com link, preview it, then download or copy the image. Free, no sign-up."
     />
 
-    <meta property="og:title" content="XShots — Tweet to PNG Screenshot Generator" />
+    <meta property="og:title" content="XShots: Tweet to Image &amp; X Post to PNG Screenshot" />
     <meta
       property="og:description"
-      content="Paste an X or Twitter URL to preview and export a clean share image. Free and browser-based."
+      content="Turn any tweet or X post into a clean PNG screenshot. Free, browser-based, no sign-up."
     />
-    <meta property="og:url" content="https://xshots.domc.me" />
+    <meta property="og:url" content="https://xshots.domc.me/" />
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="XShots" />
     <meta property="og:locale" content="en_US" />
+    <meta property="og:image" content="https://xshots.domc.me/og-image.png" />
+    <meta property="og:image:type" content="image/png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="XShots turns a tweet link into a clean PNG share image" />
 
-    <meta name="twitter:card" content="summary" />
-    <meta name="twitter:title" content="XShots — Tweet to PNG Screenshot Generator" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="XShots: Tweet to Image &amp; X Post to PNG Screenshot" />
     <meta
       name="twitter:description"
-      content="Paste an X or Twitter URL to preview and export a clean share image."
+      content="Turn any tweet or X post into a clean PNG screenshot. Free, browser-based, no sign-up."
     />
+    <meta name="twitter:image" content="https://xshots.domc.me/og-image.png" />
+    <meta name="twitter:image:alt" content="XShots turns a tweet link into a clean PNG share image" />
 
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
 
@@ -41,11 +44,18 @@
         "@context": "https://schema.org",
         "@type": "WebApplication",
         "name": "XShots",
-        "url": "https://xshots.domc.me",
-        "description": "Paste an X or Twitter URL to preview and export a clean share image.",
+        "url": "https://xshots.domc.me/",
+        "description": "Turn any tweet or X post into a clean PNG screenshot in your browser.",
         "applicationCategory": "UtilityApplication",
         "operatingSystem": "Any",
         "browserRequirements": "Requires JavaScript",
+        "screenshot": "https://xshots.domc.me/og-image.png",
+        "featureList": [
+          "Convert x.com and twitter.com post links to PNG images",
+          "Includes quoted tweets and up to four images",
+          "Download as PNG or copy to clipboard",
+          "Runs in the browser with no account or server upload"
+        ],
         "offers": {
           "@type": "Offer",
           "price": "0",
@@ -53,20 +63,86 @@
         }
       }
     </script>
-
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "FAQPage",
+        "mainEntity": [
+          {
+            "@type": "Question",
+            "name": "Is XShots free?",
+            "acceptedAnswer": { "@type": "Answer", "text": "Yes. XShots is free and open source, and you don't need an account to use it." }
+          },
+          {
+            "@type": "Question",
+            "name": "Which links are supported?",
+            "acceptedAnswer": { "@type": "Answer", "text": "Any x.com or twitter.com post link, including mobile.twitter.com links, /i/web/status/ links and links pasted without https://." }
+          },
+          {
+            "@type": "Question",
+            "name": "Does XShots upload my data?",
+            "acceptedAnswer": { "@type": "Answer", "text": "No. XShots has no backend. Your browser fetches the post from the public FxTwitter API (or Twitter's oEmbed endpoint as a fallback) and renders the PNG locally. Nothing is stored on a server." }
+          },
+          {
+            "@type": "Question",
+            "name": "What image quality do I get?",
+            "acceptedAnswer": { "@type": "Answer", "text": "Images are exported as lossless PNG files at 1.5x pixel density (1800 px wide for landscape, 1620 px for portrait), so text and photos stay sharp." }
+          },
+          {
+            "@type": "Question",
+            "name": "Are quoted tweets and multiple images included?",
+            "acceptedAnswer": { "@type": "Answer", "text": "Yes. The image includes the quoted tweet if the post has one, and up to four images. Threads, videos and polls are not supported yet." }
+          },
+          {
+            "@type": "Question",
+            "name": "Why did my import fail?",
+            "acceptedAnswer": { "@type": "Answer", "text": "Import is best effort. X platform restrictions and browser CORS rules can block remote content, in which case XShots shows a warning. Check the link and try again later." }
+          }
+        ]
+      }
+    </script>
   </head>
   <body>
     <div id="root"></div>
     <noscript>
-      <main style="max-width:600px;margin:60px auto;padding:24px;font-family:sans-serif;text-align:center;color:#1f2937;">
-        <h1>XShots — Tweet to PNG Screenshot Generator</h1>
+      <main style="max-width:720px;margin:60px auto;padding:24px;font-family:sans-serif;line-height:1.6;color:#f3f1eb;">
+        <h1>Paste a tweet URL. Get a clean share image.</h1>
         <p>
-          Paste an X or Twitter URL to preview and export a clean share image.
-          Free, browser-based, no upload required.
+          XShots turns any tweet or X post into a clean PNG screenshot.
+          Free, browser-based, no sign-up.
         </p>
-        <p style="margin-top:24px;color:#8c2f23;">
-          Please enable JavaScript to use this tool.
-        </p>
+        <p style="color:#f3c969;">Please enable JavaScript to use this tool.</p>
+
+        <h2>How to turn a tweet into an image</h2>
+        <ol>
+          <li><strong>Copy the post link.</strong> Copy the URL of any X or Twitter post from the app or browser.</li>
+          <li><strong>Paste and import.</strong> Paste it into XShots and import. XShots renders a clean card with the author, text, images and quoted tweet.</li>
+          <li><strong>Export the PNG.</strong> Download the screenshot as a PNG or copy it to your clipboard.</li>
+        </ol>
+
+        <h2>Why XShots</h2>
+        <ul>
+          <li>Free and open source, with no account or sign-up.</li>
+          <li>Runs entirely in your browser. No server stores your posts.</li>
+          <li>Clean, high-resolution PNG output ready to share anywhere.</li>
+          <li>Works with x.com and twitter.com links on desktop and mobile.</li>
+        </ul>
+
+        <h2>Frequently asked questions</h2>
+        <h3>Is XShots free?</h3>
+        <p>Yes. XShots is free and open source, and you don't need an account to use it.</p>
+        <h3>Which links are supported?</h3>
+        <p>Any x.com or twitter.com post link, including mobile.twitter.com links, /i/web/status/ links and links pasted without https://.</p>
+        <h3>Does XShots upload my data?</h3>
+        <p>No. XShots has no backend. Your browser fetches the post from the public FxTwitter API (or Twitter's oEmbed endpoint as a fallback) and renders the PNG locally. Nothing is stored on a server.</p>
+        <h3>What image quality do I get?</h3>
+        <p>Images are exported as lossless PNG files at 1.5x pixel density (1800 px wide for landscape, 1620 px for portrait), so text and photos stay sharp.</p>
+        <h3>Are quoted tweets and multiple images included?</h3>
+        <p>Yes. The image includes the quoted tweet if the post has one, and up to four images. Threads, videos and polls are not supported yet.</p>
+        <h3>Why did my import fail?</h3>
+        <p>Import is best effort. X platform restrictions and browser CORS rules can block remote content, in which case XShots shows a warning. Check the link and try again later.</p>
+
+        <p><a href="/privacy.html" style="color:#7ee0ff;">Privacy Policy</a></p>
       </main>
     </noscript>
     <script type="module" src="/src/main.tsx"></script>

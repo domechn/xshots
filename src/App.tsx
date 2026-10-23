@@ -12,6 +12,7 @@ import {
   type TweetImportResult,
 } from "./features/tweet-import/types";
 import { TweetCard } from "./features/tweet-preview/TweetCard";
+import { SiteContent } from "./SiteContent";
 
 type AppProps = {
   importer?: (rawUrl: string) => Promise<TweetImportResult>;
@@ -454,6 +455,7 @@ export default function App({
               </div>
             </section>
           </section>
+          <SiteContent />
           <footer className="app-footer">
             <p className="privacy-note">
               No account required.{" "}
