@@ -34,6 +34,36 @@ describe("parseTweetUrl", () => {
     });
   });
 
+  it("accepts URLs pasted without a protocol", () => {
+    expect(parseTweetUrl("x.com/SpaceX/status/1915324363727337943")).toEqual({
+      tweetId: "1915324363727337943",
+      normalizedUrl: "https://x.com/SpaceX/status/1915324363727337943",
+      handle: "SpaceX",
+    });
+  });
+
+  it("accepts /i/web/status and /i/status links without a handle", () => {
+    for (const url of [
+      "https://x.com/i/web/status/1915324363727337943",
+      "https://twitter.com/i/status/1915324363727337943",
+    ]) {
+      expect(parseTweetUrl(url)).toEqual({
+        tweetId: "1915324363727337943",
+        normalizedUrl: "https://x.com/i/status/1915324363727337943",
+        handle: "",
+      });
+    }
+  });
+
+  it("rejects a status segment without a numeric id", () => {
+    expect(() => parseTweetUrl("https://x.com/SpaceX/status/abc")).toThrow(
+      "The link must point to a specific tweet status.",
+    );
+    expect(() => parseTweetUrl("https://x.com/status/123")).toThrow(
+      "The link must point to a specific tweet status.",
+    );
+  });
+
   it("rejects non-twitter domains", () => {
     expect(() =>
       parseTweetUrl("https://example.com/SpaceX/status/1915324363727337943"),

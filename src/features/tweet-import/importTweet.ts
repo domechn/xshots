@@ -28,7 +28,7 @@ type RichTweetMediaItem = {
   display_url?: string;
 };
 
-type RichTweetStatus = {
+type RichTweetStatus = RichTweetMetrics & {
   text?: string;
   raw_text?: {
     text?: string;
@@ -60,22 +60,6 @@ type RichTweetStatus = {
   quoted?: RichTweetQuoteCandidate | null;
   quoted_tweet?: RichTweetQuoteCandidate | null;
   quoted_status?: RichTweetQuoteCandidate | null;
-  replies?: number | string;
-  reply_count?: number | string;
-  reposts?: number | string;
-  repost_count?: number | string;
-  quotes?: number | string;
-  quote_count?: number | string;
-  quoteCount?: number | string;
-  retweets?: number | string;
-  retweet_count?: number | string;
-  likes?: number | string;
-  favorites?: number | string;
-  favourite_count?: number | string;
-  favorite_count?: number | string;
-  bookmarks?: number | string;
-  bookmark_count?: number | string;
-  bookmarkCount?: number | string;
   engagement?: RichTweetMetrics;
   stats?: RichTweetMetrics;
 };
@@ -155,6 +139,8 @@ export async function importTweetFromUrl(
           draft: createEmptyDraft({
             ...draft,
             ...richDraft,
+            authorName: richDraft.authorName || parsed.handle,
+            handle: richDraft.handle || parsed.handle,
           }),
         };
       }
@@ -196,8 +182,8 @@ export async function importTweetFromUrl(
       status: "success",
       draft: createEmptyDraft({
         ...draft,
-        authorName: payload.author_name?.trim() ?? parsed.handle,
-        handle: readHandleFromAuthorUrl(payload.author_url) ?? parsed.handle,
+        authorName: payload.author_name?.trim() || parsed.handle,
+        handle: readHandleFromAuthorUrl(payload.author_url) || parsed.handle,
         body: extracted.body,
         bodyHtml: extracted.bodyHtml,
         timestampLabel: extracted.timestampLabel,
@@ -213,18 +199,8 @@ export async function importTweetFromUrl(
   }
 }
 
-async function defaultFetcher(
-  input: string,
-  init?: RequestInit,
-): Promise<FetchResponseLike> {
-  const response = await fetch(input, init);
-
-  return {
-    ok: response.ok,
-    status: response.status,
-    json: () => response.json() as Promise<OEmbedResponse>,
-  };
-}
+const defaultFetcher: Fetcher = (input, init) =>
+  fetch(input, { ...init, signal: AbortSignal.timeout(8000) });
 
 function extractContentFromHtml(html: string): {
   body: string;
@@ -234,7 +210,7 @@ function extractContentFromHtml(html: string): {
   const document = new DOMParser().parseFromString(html, "text/html");
   const paragraph = document.querySelector("p");
   const bodyHtml = paragraph ? sanitizeTweetHtml(paragraph) : "";
-  const body = bodyHtml ? htmlToPlainText(bodyHtml) : "";
+  const body = paragraph ? normalizeTweetText(readTextWithBreaks(paragraph)) : "";
   const timestampLabel = collapseWhitespace(
     Array.from(document.querySelectorAll("a")).at(-1)?.textContent ?? "",
   );
@@ -423,20 +399,6 @@ function readInlineEmphasis(styleValue: string | null): {
   };
 }
 
-function htmlToPlainText(html: string): string {
-  const document = new DOMParser().parseFromString(
-    `<p>${html}</p>`,
-    "text/html",
-  );
-  const paragraph = document.querySelector("p");
-
-  if (!paragraph) {
-    return "";
-  }
-
-  return normalizeTweetText(readTextWithBreaks(paragraph));
-}
-
 function readTextWithBreaks(node: ParentNode): string {
   return Array.from(node.childNodes)
     .map((childNode) => {
@@ -464,7 +426,7 @@ function escapeHtml(value: string): string {
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
-    .replace(/\"/g, "&quot;")
+    .replace(/"/g, "&quot;")
     .replace(/'/g, "&#39;");
 }
 
@@ -492,39 +454,20 @@ function extractEngagementCounts(
   "replyCount" | "repostCount" | "likeCount" | "bookmarkCount"
 > {
   return {
-    replyCount: readMetricCount(
-      status?.replies,
-      status?.reply_count,
-      status?.engagement?.replies,
-      status?.engagement?.reply_count,
-      status?.stats?.replies,
-      status?.stats?.reply_count,
+    replyCount: readStatusMetric(status, "replies", "reply_count"),
+    repostCount: readDisplayedRepostCount(status),
+    likeCount: readStatusMetric(
+      status,
+      "likes",
+      "favorites",
+      "favourite_count",
+      "favorite_count",
     ),
-    repostCount: readMetricCount(readDisplayedRepostCount(status)),
-    likeCount: readMetricCount(
-      status?.likes,
-      status?.favorites,
-      status?.favourite_count,
-      status?.favorite_count,
-      status?.engagement?.likes,
-      status?.engagement?.favorites,
-      status?.engagement?.favourite_count,
-      status?.engagement?.favorite_count,
-      status?.stats?.likes,
-      status?.stats?.favorites,
-      status?.stats?.favourite_count,
-      status?.stats?.favorite_count,
-    ),
-    bookmarkCount: readMetricCount(
-      status?.bookmarks,
-      status?.bookmark_count,
-      status?.bookmarkCount,
-      status?.engagement?.bookmarks,
-      status?.engagement?.bookmark_count,
-      status?.engagement?.bookmarkCount,
-      status?.stats?.bookmarks,
-      status?.stats?.bookmark_count,
-      status?.stats?.bookmarkCount,
+    bookmarkCount: readStatusMetric(
+      status,
+      "bookmarks",
+      "bookmark_count",
+      "bookmarkCount",
     ),
   };
 }
@@ -532,30 +475,18 @@ function extractEngagementCounts(
 function readDisplayedRepostCount(
   status: RichTweetStatus | undefined,
 ): number | null {
-  const repostCount = readMetricCount(
-    status?.reposts,
-    status?.repost_count,
-    status?.retweets,
-    status?.retweet_count,
-    status?.engagement?.reposts,
-    status?.engagement?.repost_count,
-    status?.engagement?.retweets,
-    status?.engagement?.retweet_count,
-    status?.stats?.reposts,
-    status?.stats?.repost_count,
-    status?.stats?.retweets,
-    status?.stats?.retweet_count,
+  const repostCount = readStatusMetric(
+    status,
+    "reposts",
+    "repost_count",
+    "retweets",
+    "retweet_count",
   );
-  const quoteCount = readMetricCount(
-    status?.quotes,
-    status?.quote_count,
-    status?.quoteCount,
-    status?.engagement?.quotes,
-    status?.engagement?.quote_count,
-    status?.engagement?.quoteCount,
-    status?.stats?.quotes,
-    status?.stats?.quote_count,
-    status?.stats?.quoteCount,
+  const quoteCount = readStatusMetric(
+    status,
+    "quotes",
+    "quote_count",
+    "quoteCount",
   );
 
   if (repostCount === null && quoteCount === null) {
@@ -563,6 +494,18 @@ function readDisplayedRepostCount(
   }
 
   return (repostCount ?? 0) + (quoteCount ?? 0);
+}
+
+// Checks every key on the status itself first, then `engagement`, then `stats`.
+function readStatusMetric(
+  status: RichTweetStatus | undefined,
+  ...keys: Array<keyof RichTweetMetrics>
+): number | null {
+  return readMetricCount(
+    ...[status, status?.engagement, status?.stats].flatMap((source) =>
+      keys.map((key) => source?.[key]),
+    ),
+  );
 }
 
 function readMetricCount(

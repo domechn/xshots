@@ -184,6 +184,22 @@ describe("TweetCard", () => {
     expect(accents[1]).toHaveTextContent("#Starship");
   });
 
+  it("accents unicode hashtags but not emails or mid-word symbols", () => {
+    const { container } = render(
+      <TweetCard
+        draft={createEmptyDraft({
+          body: "Mail ops@spacex.com about #火星 and #Café, not issue#42.",
+        })}
+      />,
+    );
+
+    const accents = Array.from(
+      container.querySelectorAll(".tweet-card__accent"),
+    ).map((accent) => accent.textContent);
+
+    expect(accents).toEqual(["#火星", "#Café"]);
+  });
+
   it("styles mentions and hashtags in preserved bodyHtml with x blue", () => {
     const { container } = render(
       <TweetCard

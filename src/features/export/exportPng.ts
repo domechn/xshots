@@ -1,4 +1,4 @@
-import { toPng as htmlToPng } from "html-to-image";
+import { toBlob as htmlToBlob } from "html-to-image";
 import type { TweetDraft } from "../tweet-import/types";
 
 type ExportSizeKey = "landscape" | "portrait";
@@ -6,17 +6,17 @@ type ExportSizeKey = "landscape" | "portrait";
 type ProbeAsset = (url: string) => Promise<boolean>;
 type ResolveAssetUrl = (url: string) => Promise<string | null>;
 
-type ToPng = (
+type ToBlob = (
   node: HTMLElement,
   options?: Record<string, unknown>,
-) => Promise<string>;
+) => Promise<Blob | null>;
 
 type ExportOptions = {
   draft: TweetDraft;
   size?: ExportSizeKey;
   probeAsset?: ProbeAsset;
   resolveAssetUrl?: ResolveAssetUrl;
-  toPng?: ToPng;
+  toBlob?: ToBlob;
 };
 
 const EXPORT_SIZES: Record<ExportSizeKey, { width: number; height: number }> = {
@@ -24,7 +24,7 @@ const EXPORT_SIZES: Record<ExportSizeKey, { width: number; height: number }> = {
   portrait: { width: 1080, height: 1350 },
 };
 const EXPORT_PIXEL_RATIO = 1.5;
-const decodedImages = new WeakSet<HTMLImageElement>();
+const ASSET_FETCH_TIMEOUT_MS = 8000;
 
 export async function exportTweetCardToPng(
   node: HTMLElement,
@@ -32,7 +32,7 @@ export async function exportTweetCardToPng(
 ): Promise<
   | {
       status: "success";
-      dataUrl: string;
+      blob: Blob;
     }
   | {
       status: "blocked";
@@ -41,16 +41,15 @@ export async function exportTweetCardToPng(
 > {
   const size = EXPORT_SIZES[options.size ?? "landscape"];
   const canvasSize = resolveCanvasSize(node, size);
-  const assets = collectAssetUrls(node, options.draft);
+  const remoteAssets = collectAssetUrls(node, options.draft).filter(
+    (assetUrl) => !isLocalAsset(assetUrl),
+  );
+  const resolvedUrls = await Promise.all(
+    remoteAssets.map((assetUrl) => resolveRemoteAssetUrl(assetUrl, options)),
+  );
   const resolvedAssets = new Map<string, string>();
 
-  for (const assetUrl of assets) {
-    if (isLocalAsset(assetUrl)) {
-      continue;
-    }
-
-    const resolvedUrl = await resolveRemoteAssetUrl(assetUrl, options);
-
+  for (const [index, resolvedUrl] of resolvedUrls.entries()) {
     if (!resolvedUrl) {
       return {
         status: "blocked",
@@ -59,26 +58,29 @@ export async function exportTweetCardToPng(
       };
     }
 
-    resolvedAssets.set(assetUrl, resolvedUrl);
+    resolvedAssets.set(remoteAssets[index], resolvedUrl);
   }
 
-  const toPng = options.toPng ?? htmlToPng;
+  const toBlob = options.toBlob ?? htmlToBlob;
   const restoreImages = await swapInlineAssetUrls(node, resolvedAssets);
 
   try {
     await waitForRenderedImages(node);
 
-    const dataUrl = await toPng(node, {
-      cacheBust: true,
+    const blob = await toBlob(node, {
       pixelRatio: EXPORT_PIXEL_RATIO,
       backgroundColor: "#05070a",
       canvasWidth: canvasSize.width,
       canvasHeight: canvasSize.height,
     });
 
+    if (!blob) {
+      throw new Error("The PNG export failed.");
+    }
+
     return {
       status: "success",
-      dataUrl,
+      blob,
     };
   } finally {
     restoreImages();
@@ -93,17 +95,12 @@ async function waitForRenderedImages(node: HTMLElement): Promise<void> {
 }
 
 async function waitForImageDecode(image: HTMLImageElement): Promise<void> {
-  if (decodedImages.has(image)) {
-    return;
-  }
-
   if (typeof image.decode !== "function") {
     return;
   }
 
   try {
     await image.decode();
-    decodedImages.add(image);
   } catch {
     // Keep exporting if decode() rejects; broken images are handled by the
     // browser exactly as they are rendered in the preview.
@@ -140,20 +137,8 @@ function resolveCanvasSize(
   };
 }
 
-async function defaultProbeAsset(url: string): Promise<boolean> {
-  try {
-    const response = await fetch(url, {
-      method: "GET",
-      mode: "cors",
-      cache: "no-store",
-    });
-
-    return response.ok;
-  } catch {
-    return false;
-  }
-}
-
+// The only retry layer: a cached copy may lack CORS headers (it was loaded by
+// a plain <img>), so fall back to a fresh network request.
 async function defaultResolveAssetUrl(url: string): Promise<string | null> {
   for (const cacheMode of ["force-cache", "reload"] as const) {
     try {
@@ -161,6 +146,7 @@ async function defaultResolveAssetUrl(url: string): Promise<string | null> {
         method: "GET",
         mode: "cors",
         cache: cacheMode,
+        signal: AbortSignal.timeout(ASSET_FETCH_TIMEOUT_MS),
       });
 
       if (!response.ok) {
@@ -209,21 +195,6 @@ function collectAssetUrls(node: HTMLElement, draft: TweetDraft): string[] {
 }
 
 async function resolveRemoteAssetUrl(
-  assetUrl: string,
-  options: ExportOptions,
-): Promise<string | null> {
-  for (let attempt = 0; attempt < 2; attempt += 1) {
-    const resolvedUrl = await resolveRemoteAssetUrlOnce(assetUrl, options);
-
-    if (resolvedUrl) {
-      return resolvedUrl;
-    }
-  }
-
-  return null;
-}
-
-async function resolveRemoteAssetUrlOnce(
   assetUrl: string,
   options: ExportOptions,
 ): Promise<string | null> {
@@ -300,7 +271,6 @@ async function setImageSource(
   if (typeof image.decode === "function") {
     try {
       await image.decode();
-      decodedImages.add(image);
       return;
     } catch {
       // Fall back to the load/error listeners below if decode() rejects.
@@ -328,8 +298,6 @@ async function setImageSource(
     // Safety net so we never hang if neither event fires.
     const timeoutId = window.setTimeout(finish, 5000);
   });
-
-  decodedImages.add(image);
 }
 
 async function blobToDataUrl(blob: Blob): Promise<string> {

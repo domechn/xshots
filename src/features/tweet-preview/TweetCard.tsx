@@ -1,6 +1,11 @@
 import type { EmbeddedTweet, TweetDraft } from "../tweet-import/types";
-import { Fragment, useEffect, useRef, useState } from "react";
-import type { ReactNode, SyntheticEvent } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
+import type {
+  Dispatch,
+  ReactNode,
+  SetStateAction,
+  SyntheticEvent,
+} from "react";
 
 const ENGAGEMENT_COUNT_FORMATTER = new Intl.NumberFormat("en-US", {
   notation: "compact",
@@ -20,6 +25,14 @@ export function TweetCard({ draft }: TweetCardProps) {
     : draft.mediaUrl
       ? [draft.mediaUrl]
       : [];
+  const body = useMemo(
+    () =>
+      renderTweetBody(
+        draft.body || "Paste the tweet text or import it from a link.",
+        draft.bodyHtml,
+      ),
+    [draft.body, draft.bodyHtml],
+  );
 
   return (
     <article
@@ -58,12 +71,7 @@ export function TweetCard({ draft }: TweetCardProps) {
       </header>
 
       <div className="tweet-card__body">
-        <p className="tweet-card__text">
-          {renderTweetBody(
-            draft.body || "Paste the tweet text or import it from a link.",
-            draft.bodyHtml,
-          )}
-        </p>
+        <p className="tweet-card__text">{body}</p>
         <MediaGallery mediaUrls={mediaUrls} alt="Tweet media preview" />
         {draft.quotedTweet ? (
           <QuotedTweetCard tweet={draft.quotedTweet} />
@@ -101,6 +109,10 @@ function QuotedTweetCard({ tweet }: { tweet: EmbeddedTweet }) {
   const quoteClassName = mediaUrls.length
     ? "tweet-card__quote tweet-card__quote--media"
     : "tweet-card__quote";
+  const body = useMemo(
+    () => renderTweetBody(tweet.body, tweet.bodyHtml),
+    [tweet.body, tweet.bodyHtml],
+  );
 
   return (
     <section className={quoteClassName} aria-label="Quoted tweet preview">
@@ -138,7 +150,7 @@ function QuotedTweetCard({ tweet }: { tweet: EmbeddedTweet }) {
       </div>
 
       <p className="tweet-card__quote-text tweet-card__quote-text--clamped">
-        {renderTweetBody(tweet.body, tweet.bodyHtml)}
+        {body}
       </p>
 
       <MediaGallery
@@ -164,24 +176,29 @@ function MediaGallery({
   isQuoted?: boolean;
 }) {
   const galleryMediaUrls = mediaUrls.slice(0, 4);
-  const [singleAspectRatio, setSingleAspectRatio] = useState<number | null>(
+  // Keyed by URL so a ratio measured for a previous image is ignored.
+  const [measuredAspect, setMeasuredAspect] = useState<MeasuredAspect | null>(
     null,
   );
   const singleImageRef = useRef<HTMLImageElement | null>(null);
   const layout = getMediaLayout(galleryMediaUrls.length);
   const isSingleImage = layout === "single";
   const singleMediaUrl = isSingleImage ? galleryMediaUrls[0] : null;
-
-  useEffect(() => {
-    setSingleAspectRatio(null);
-  }, [singleMediaUrl]);
+  const singleAspectRatio =
+    measuredAspect && measuredAspect.url === singleMediaUrl
+      ? measuredAspect.ratio
+      : null;
 
   useEffect(() => {
     if (!singleMediaUrl || !singleImageRef.current) {
       return;
     }
 
-    updateAspectRatioFromImage(singleImageRef.current, setSingleAspectRatio);
+    updateAspectRatioFromImage(
+      singleImageRef.current,
+      singleMediaUrl,
+      setMeasuredAspect,
+    );
   }, [singleMediaUrl]);
 
   const singleImageShellStyle =
@@ -197,11 +214,15 @@ function MediaGallery({
   }
 
   function handleImageLoad(event: SyntheticEvent<HTMLImageElement>) {
-    if (!isSingleImage) {
+    if (!singleMediaUrl) {
       return;
     }
 
-    updateAspectRatioFromImage(event.currentTarget, setSingleAspectRatio);
+    updateAspectRatioFromImage(
+      event.currentTarget,
+      singleMediaUrl,
+      setMeasuredAspect,
+    );
   }
 
   return (
@@ -229,30 +250,25 @@ function MediaGallery({
   );
 }
 
+type MeasuredAspect = { url: string; ratio: number };
+
 function updateAspectRatioFromImage(
   image: HTMLImageElement,
-  setAspectRatio: (
-    nextAspectRatio:
-      | number
-      | null
-      | ((current: number | null) => number | null),
-  ) => void,
+  url: string,
+  setMeasuredAspect: Dispatch<SetStateAction<MeasuredAspect | null>>,
 ) {
   if (!image.naturalWidth || !image.naturalHeight) {
     return;
   }
 
-  const nextAspectRatio = image.naturalWidth / image.naturalHeight;
+  const ratio = image.naturalWidth / image.naturalHeight;
 
-  setAspectRatio((currentAspectRatio) => {
-    if (
-      currentAspectRatio !== null &&
-      Math.abs(currentAspectRatio - nextAspectRatio) < 0.001
-    ) {
-      return currentAspectRatio;
+  setMeasuredAspect((current) => {
+    if (current?.url === url && Math.abs(current.ratio - ratio) < 0.001) {
+      return current;
     }
 
-    return nextAspectRatio;
+    return { url, ratio };
   });
 }
 
@@ -465,7 +481,7 @@ function renderAccentNode(node: ChildNode, keyPrefix: string): ReactNode[] {
 }
 
 function renderAccentText(text: string, keyPrefix: string): ReactNode[] {
-  const accentPattern = /[@#][A-Za-z0-9_]+/g;
+  const accentPattern = /(?<![\w@])[@#][\p{L}\p{N}_]+/gu;
   const nodes: ReactNode[] = [];
   let lastIndex = 0;
 

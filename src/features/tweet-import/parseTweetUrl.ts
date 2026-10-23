@@ -14,10 +14,13 @@ const SUPPORTED_HOSTS = new Set([
 ]);
 
 export function parseTweetUrl(rawUrl: string): ParsedTweetUrl {
+  const trimmedUrl = rawUrl.trim();
   let parsedUrl: URL;
 
   try {
-    parsedUrl = new URL(rawUrl.trim());
+    parsedUrl = new URL(
+      /^https?:\/\//i.test(trimmedUrl) ? trimmedUrl : `https://${trimmedUrl}`,
+    );
   } catch {
     throw new Error("Enter a valid X or Twitter post link.");
   }
@@ -27,22 +30,19 @@ export function parseTweetUrl(rawUrl: string): ParsedTweetUrl {
   }
 
   const segments = parsedUrl.pathname.split("/").filter(Boolean);
-  const statusIndex = segments.findIndex((segment) => segment === "status");
+  const statusIndex = segments.indexOf("status");
+  const tweetId = statusIndex >= 1 ? segments[statusIndex + 1] : undefined;
 
-  if (statusIndex !== 1 || !segments[0] || !segments[2]) {
+  if (!tweetId || !/^\d+$/.test(tweetId)) {
     throw new Error("The link must point to a specific tweet status.");
   }
 
-  const handle = segments[0];
-  const tweetId = segments[2];
-
-  if (!/^\d+$/.test(tweetId)) {
-    throw new Error("The link must point to a specific tweet status.");
-  }
+  // `/i/status/ID` and `/i/web/status/ID` carry no author handle.
+  const handle = statusIndex === 1 && segments[0] !== "i" ? segments[0] : "";
 
   return {
     tweetId,
     handle,
-    normalizedUrl: `https://x.com/${handle}/status/${tweetId}`,
+    normalizedUrl: `https://x.com/${handle || "i"}/status/${tweetId}`,
   };
 }

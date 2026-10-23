@@ -2,6 +2,8 @@ import { describe, expect, it, vi } from "vitest";
 import { createEmptyDraft } from "../tweet-import/types";
 import { exportTweetCardToPng } from "./exportPng";
 
+const PNG_BLOB = new Blob(["png"], { type: "image/png" });
+
 describe("exportTweetCardToPng", () => {
   it("waits for image decode before exporting so the swap is fully applied", async () => {
     const node = document.createElement("div");
@@ -17,6 +19,11 @@ describe("exportTweetCardToPng", () => {
     // can observe when (and whether) it is awaited.
     (image as { decode?: () => Promise<void> }).decode = () => {
       decodeCalls += 1;
+
+      if (decodeResolved) {
+        return Promise.resolve();
+      }
+
       return new Promise<void>((resolve) => {
         resolveDecode = () => {
           decodeResolved = true;
@@ -25,10 +32,10 @@ describe("exportTweetCardToPng", () => {
       });
     };
 
-    const toPng = vi.fn(async () => {
+    const toBlob = vi.fn(async () => {
       // Export must not start until decode() of the swapped data URL resolves.
       expect(decodeResolved).toBe(true);
-      return "data:image/png;base64,abc";
+      return PNG_BLOB;
     });
 
     const exportPromise = exportTweetCardToPng(node, {
@@ -36,14 +43,14 @@ describe("exportTweetCardToPng", () => {
         avatarUrl: "https://images.example.com/a.jpg",
       }),
       resolveAssetUrl: async () => "data:image/png;base64,avatar",
-      toPng,
+      toBlob,
     } as never);
 
     // Allow the async swap to progress through several await points until it
     // reaches the decode() await.
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(decodeCalls).toBe(1);
-    expect(toPng).not.toHaveBeenCalled();
+    expect(toBlob).not.toHaveBeenCalled();
 
     resolveDecode();
 
@@ -51,9 +58,9 @@ describe("exportTweetCardToPng", () => {
 
     expect(result).toEqual({
       status: "success",
-      dataUrl: "data:image/png;base64,abc",
+      blob: PNG_BLOB,
     });
-    expect(toPng).toHaveBeenCalledOnce();
+    expect(toBlob).toHaveBeenCalledOnce();
 
     document.body.removeChild(node);
   });
@@ -85,7 +92,7 @@ describe("exportTweetCardToPng", () => {
       value: vi.fn(),
     });
 
-    const toPng = vi.fn(async () => "data:image/png;base64,abc");
+    const toBlob = vi.fn(async () => PNG_BLOB);
 
     try {
       const exportPromise = exportTweetCardToPng(node, {
@@ -93,12 +100,12 @@ describe("exportTweetCardToPng", () => {
           mediaUrl: "https://images.example.com/media.jpg",
         }),
         resolveAssetUrl: async () => "data:image/png;base64,media",
-        toPng,
+        toBlob,
       } as never);
 
       await new Promise((resolve) => setTimeout(resolve, 0));
 
-      expect(toPng).not.toHaveBeenCalled();
+      expect(toBlob).not.toHaveBeenCalled();
       expect(pendingFrame.callback).not.toBeNull();
 
       if (!pendingFrame.callback) {
@@ -109,9 +116,9 @@ describe("exportTweetCardToPng", () => {
 
       await expect(exportPromise).resolves.toEqual({
         status: "success",
-        dataUrl: "data:image/png;base64,abc",
+        blob: PNG_BLOB,
       });
-      expect(toPng).toHaveBeenCalledOnce();
+      expect(toBlob).toHaveBeenCalledOnce();
     } finally {
       Object.defineProperty(window, "requestAnimationFrame", {
         configurable: true,
@@ -127,14 +134,14 @@ describe("exportTweetCardToPng", () => {
 
   it("blocks export when a remote asset cannot be verified for browser-safe export", async () => {
     const node = document.createElement("div");
-    const toPng = vi.fn();
+    const toBlob = vi.fn();
 
     const result = await exportTweetCardToPng(node, {
       draft: createEmptyDraft({
         mediaUrl: "https://images.example.com/poster.jpg",
       }),
       probeAsset: async () => false,
-      toPng,
+      toBlob,
     });
 
     expect(result.status).toBe("blocked");
@@ -142,7 +149,7 @@ describe("exportTweetCardToPng", () => {
       throw new Error("Expected export to be blocked.");
     }
     expect(result.message).toContain("upload the image locally");
-    expect(toPng).not.toHaveBeenCalled();
+    expect(toBlob).not.toHaveBeenCalled();
   });
 
   it("returns a data URL when exportable assets are available", async () => {
@@ -154,12 +161,12 @@ describe("exportTweetCardToPng", () => {
         mediaUrl: "data:image/png;base64,xyz",
       }),
       probeAsset: async () => true,
-      toPng: async () => "data:image/png;base64,abc",
+      toBlob: async () => PNG_BLOB,
     });
 
     expect(result).toEqual({
       status: "success",
-      dataUrl: "data:image/png;base64,abc",
+      blob: PNG_BLOB,
     });
   });
 
@@ -171,7 +178,7 @@ describe("exportTweetCardToPng", () => {
       <img alt="photo 2" src="https://images.example.com/photo-2.jpg">
     `;
 
-    const toPng = vi.fn(async (element: HTMLElement) => {
+    const toBlob = vi.fn(async (element: HTMLElement) => {
       const imageSources = Array.from(element.querySelectorAll("img")).map(
         (image) => image.getAttribute("src"),
       );
@@ -182,7 +189,7 @@ describe("exportTweetCardToPng", () => {
         "data:image/png;base64,photo2",
       ]);
 
-      return "data:image/png;base64,abc";
+      return PNG_BLOB;
     });
 
     const draft = {
@@ -198,7 +205,7 @@ describe("exportTweetCardToPng", () => {
 
     const result = await exportTweetCardToPng(node, {
       draft,
-      toPng,
+      toBlob,
       resolveAssetUrl: async (url: string) => {
         if (url.endsWith("avatar.jpg")) {
           return "data:image/png;base64,avatar";
@@ -214,9 +221,9 @@ describe("exportTweetCardToPng", () => {
 
     expect(result).toEqual({
       status: "success",
-      dataUrl: "data:image/png;base64,abc",
+      blob: PNG_BLOB,
     });
-    expect(toPng).toHaveBeenCalledOnce();
+    expect(toBlob).toHaveBeenCalledOnce();
   });
 
   it("also inlines quoted tweet assets before exporting", async () => {
@@ -226,7 +233,7 @@ describe("exportTweetCardToPng", () => {
       <img alt="quoted photo" src="https://images.example.com/quoted-photo.jpg">
     `;
 
-    const toPng = vi.fn(async (element: HTMLElement) => {
+    const toBlob = vi.fn(async (element: HTMLElement) => {
       const imageSources = Array.from(element.querySelectorAll("img")).map(
         (image) => image.getAttribute("src"),
       );
@@ -236,7 +243,7 @@ describe("exportTweetCardToPng", () => {
         "data:image/png;base64,quotedphoto",
       ]);
 
-      return "data:image/png;base64,abc";
+      return PNG_BLOB;
     });
 
     const result = await exportTweetCardToPng(node, {
@@ -254,7 +261,7 @@ describe("exportTweetCardToPng", () => {
           verified: true,
         },
       }),
-      toPng,
+      toBlob,
       resolveAssetUrl: async (url: string) => {
         if (url.endsWith("quoted-avatar.jpg")) {
           return "data:image/png;base64,quotedavatar";
@@ -266,7 +273,7 @@ describe("exportTweetCardToPng", () => {
 
     expect(result).toEqual({
       status: "success",
-      dataUrl: "data:image/png;base64,abc",
+      blob: PNG_BLOB,
     });
   });
 
@@ -277,7 +284,7 @@ describe("exportTweetCardToPng", () => {
       <img alt="photo" src="data:image/png;base64,photo">
     `;
 
-    const toPng = vi.fn(async () => "data:image/png;base64,abc");
+    const toBlob = vi.fn(async () => PNG_BLOB);
 
     const result = await exportTweetCardToPng(node, {
       draft: createEmptyDraft({
@@ -286,38 +293,76 @@ describe("exportTweetCardToPng", () => {
         mediaUrls: ["https://images.example.com/stale-photo.jpg"],
       }),
       resolveAssetUrl: async () => null,
-      toPng,
+      toBlob,
     } as never);
 
     expect(result).toEqual({
       status: "success",
-      dataUrl: "data:image/png;base64,abc",
+      blob: PNG_BLOB,
     });
   });
 
-  it("retries transient asset resolution failures before blocking export", async () => {
+  it("retries a failed cached image fetch with a network reload before blocking export", async () => {
     const node = document.createElement("div");
     node.innerHTML =
       '<img alt="avatar" src="https://images.example.com/avatar.jpg">';
 
-    const resolveAssetUrl = vi
-      .fn<(_: string) => Promise<string | null>>()
-      .mockResolvedValueOnce(null)
-      .mockResolvedValueOnce("data:image/png;base64,avatar");
+    const fetchSpy = vi
+      .spyOn(globalThis, "fetch")
+      .mockRejectedValueOnce(new TypeError("CORS"))
+      .mockResolvedValueOnce({
+        ok: true,
+        blob: async () => new Blob(["avatar"], { type: "image/png" }),
+      } as Response);
 
-    const result = await exportTweetCardToPng(node, {
-      draft: createEmptyDraft({
-        avatarUrl: "https://images.example.com/avatar.jpg",
-      }),
-      resolveAssetUrl,
-      toPng: async () => "data:image/png;base64,abc",
-    } as never);
+    try {
+      const result = await exportTweetCardToPng(node, {
+        draft: createEmptyDraft({
+          avatarUrl: "https://images.example.com/avatar.jpg",
+        }),
+        toBlob: async () => PNG_BLOB,
+      });
 
-    expect(result).toEqual({
-      status: "success",
-      dataUrl: "data:image/png;base64,abc",
+      expect(result).toEqual({
+        status: "success",
+        blob: PNG_BLOB,
+      });
+      expect(fetchSpy).toHaveBeenCalledTimes(2);
+      expect(fetchSpy.mock.calls.map(([, init]) => init?.cache)).toEqual([
+        "force-cache",
+        "reload",
+      ]);
+      expect(fetchSpy.mock.calls[0][1]?.signal).toBeInstanceOf(AbortSignal);
+    } finally {
+      fetchSpy.mockRestore();
+    }
+  });
+
+  it("resolves remote assets in parallel", async () => {
+    const node = document.createElement("div");
+    node.innerHTML = `
+      <img alt="avatar" src="https://images.example.com/avatar.jpg">
+      <img alt="photo" src="https://images.example.com/photo.jpg">
+    `;
+    const pending: Array<() => void> = [];
+
+    const exportPromise = exportTweetCardToPng(node, {
+      draft: createEmptyDraft(),
+      resolveAssetUrl: (url: string) =>
+        new Promise<string>((resolve) => {
+          pending.push(() => resolve(`data:image/png;base64,${url.length}`));
+        }),
+      toBlob: async () => PNG_BLOB,
     });
-    expect(resolveAssetUrl).toHaveBeenCalledTimes(2);
+
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(pending).toHaveLength(2);
+    pending.forEach((resolve) => resolve());
+
+    await expect(exportPromise).resolves.toEqual({
+      status: "success",
+      blob: PNG_BLOB,
+    });
   });
 
   it("preserves the rendered card aspect ratio during portrait export", async () => {
@@ -331,21 +376,21 @@ describe("exportTweetCardToPng", () => {
       value: 900,
     });
 
-    const toPng = vi.fn(async () => "data:image/png;base64,abc");
+    const toBlob = vi.fn(async () => PNG_BLOB);
 
     const result = await exportTweetCardToPng(node, {
       draft: createEmptyDraft({
         body: "Launch update",
       }),
       size: "portrait",
-      toPng,
+      toBlob,
     });
 
     expect(result).toEqual({
       status: "success",
-      dataUrl: "data:image/png;base64,abc",
+      blob: PNG_BLOB,
     });
-    expect(toPng).toHaveBeenCalledWith(
+    expect(toBlob).toHaveBeenCalledWith(
       node,
       expect.objectContaining({
         canvasWidth: 1080,
@@ -356,20 +401,20 @@ describe("exportTweetCardToPng", () => {
 
   it("uses a lower pixel ratio to reduce copy and download image size", async () => {
     const node = document.createElement("div");
-    const toPng = vi.fn(async () => "data:image/png;base64,abc");
+    const toBlob = vi.fn(async () => PNG_BLOB);
 
     const result = await exportTweetCardToPng(node, {
       draft: createEmptyDraft({
         body: "Launch update",
       }),
-      toPng,
+      toBlob,
     });
 
     expect(result).toEqual({
       status: "success",
-      dataUrl: "data:image/png;base64,abc",
+      blob: PNG_BLOB,
     });
-    expect(toPng).toHaveBeenCalledWith(
+    expect(toBlob).toHaveBeenCalledWith(
       node,
       expect.objectContaining({
         pixelRatio: 1.5,

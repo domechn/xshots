@@ -1,4 +1,10 @@
-import { startTransition, useEffect, useRef, useState } from "react";
+import {
+  startTransition,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 import { exportTweetCardToPng } from "./features/export/exportPng";
 import { importTweetFromUrl } from "./features/tweet-import/importTweet";
 import {
@@ -10,7 +16,7 @@ import { TweetCard } from "./features/tweet-preview/TweetCard";
 type AppProps = {
   importer?: (rawUrl: string) => Promise<TweetImportResult>;
   exporter?: typeof exportTweetCardToPng;
-  clipboardWriter?: (dataUrl: string) => Promise<void>;
+  clipboardWriter?: (png: Promise<Blob>) => Promise<void>;
 };
 
 type SharePngResult = Awaited<ReturnType<typeof exportTweetCardToPng>>;
@@ -55,12 +61,65 @@ export default function App({
   const [isExporting, setIsExporting] = useState(false);
   const [isCopying, setIsCopying] = useState(false);
 
+  const invalidateSharePngCache = useCallback(() => {
+    sharePngRevisionRef.current += 1;
+    preparedSharePngRef.current = null;
+    pendingSharePngRef.current = null;
+
+    return sharePngRevisionRef.current;
+  }, []);
+
+  const startSharePngRender = useCallback(
+    (
+      revision = sharePngRevisionRef.current,
+      previewSizeKey = getPreviewSizeKey(previewRef.current),
+    ): Promise<SharePngResult> => {
+      const previewNode = previewRef.current;
+
+      if (!previewNode) {
+        return Promise.reject(new Error("The preview is not ready yet."));
+      }
+
+      const renderPromise = exporter(previewNode, {
+        draft,
+        size: "portrait",
+      })
+        .then((result) => {
+          if (
+            sharePngRevisionRef.current === revision &&
+            result.status === "success"
+          ) {
+            preparedSharePngRef.current = {
+              ...result,
+              previewSizeKey,
+            };
+          }
+
+          return result;
+        })
+        .finally(() => {
+          if (
+            sharePngRevisionRef.current === revision &&
+            pendingSharePngRef.current?.promise === renderPromise
+          ) {
+            pendingSharePngRef.current = null;
+          }
+        });
+
+      pendingSharePngRef.current = {
+        promise: renderPromise,
+        previewSizeKey,
+      };
+
+      return renderPromise;
+    },
+    [draft, exporter],
+  );
+
   useEffect(() => {
     if (!status) {
       return;
     }
-
-    setIsStatusExiting(false);
 
     const exitTimer = window.setTimeout(() => {
       setIsStatusExiting(true);
@@ -95,7 +154,7 @@ export default function App({
         pendingSharePngRef.current = null;
       }
     };
-  }, [draft, exporter]);
+  }, [draft.sourceUrl, invalidateSharePngCache, startSharePngRender]);
 
   useEffect(() => {
     if (
@@ -108,27 +167,32 @@ export default function App({
 
     const node = previewRef.current;
     let lastPreviewSizeKey = getPreviewSizeKey(node);
+    let debounceTimer: number | undefined;
 
     const observer = new ResizeObserver(() => {
-      const nextPreviewSizeKey = getPreviewSizeKey(node);
+      window.clearTimeout(debounceTimer);
+      debounceTimer = window.setTimeout(() => {
+        const nextPreviewSizeKey = getPreviewSizeKey(node);
 
-      if (!nextPreviewSizeKey || nextPreviewSizeKey === lastPreviewSizeKey) {
-        return;
-      }
+        if (!nextPreviewSizeKey || nextPreviewSizeKey === lastPreviewSizeKey) {
+          return;
+        }
 
-      lastPreviewSizeKey = nextPreviewSizeKey;
+        lastPreviewSizeKey = nextPreviewSizeKey;
 
-      const revision = invalidateSharePngCache();
-      const renderPromise = startSharePngRender(revision, nextPreviewSizeKey);
-      void renderPromise.catch(() => undefined);
+        const revision = invalidateSharePngCache();
+        const renderPromise = startSharePngRender(revision, nextPreviewSizeKey);
+        void renderPromise.catch(() => undefined);
+      }, 300);
     });
 
     observer.observe(node);
 
     return () => {
+      window.clearTimeout(debounceTimer);
       observer.disconnect();
     };
-  }, [draft, exporter]);
+  }, [draft.sourceUrl, invalidateSharePngCache, startSharePngRender]);
 
   function showStatus(nextStatus: StatusState) {
     setIsStatusExiting(false);
@@ -203,7 +267,7 @@ export default function App({
         return;
       }
 
-      downloadDataUrl(result.dataUrl, buildFilename(draft.sourceUrl));
+      downloadBlob(result.blob, buildFilename(draft.sourceUrl));
       showStatus({
         tone: "success",
         message: "PNG ready. The rendered tweet card has been downloaded.",
@@ -223,10 +287,26 @@ export default function App({
     setIsCopying(true);
     clearStatus();
 
-    try {
-      const result = await renderSharePng();
+    const renderPromise = renderSharePng();
+    // Safari only allows clipboard.write() synchronously inside the click, so
+    // hand it the pending PNG instead of awaiting the render first.
+    const pngPromise = renderPromise.then((result) =>
+      result.status === "success"
+        ? result.blob
+        : Promise.reject(new Error(result.message)),
+    );
+    void pngPromise.catch(() => undefined);
 
-      if (result.status === "blocked") {
+    try {
+      await clipboardWriter(pngPromise);
+      showStatus({
+        tone: "success",
+        message: "PNG copied to the clipboard.",
+      });
+    } catch (error) {
+      const result = await renderPromise.catch(() => null);
+
+      if (result?.status === "blocked") {
         showStatus({
           tone: "warning",
           message: result.message,
@@ -234,12 +314,6 @@ export default function App({
         return;
       }
 
-      await clipboardWriter(result.dataUrl);
-      showStatus({
-        tone: "success",
-        message: "PNG copied to the clipboard.",
-      });
-    } catch (error) {
       showStatus({
         tone: "error",
         message:
@@ -274,73 +348,25 @@ export default function App({
     return await startSharePngRender(revision, previewSizeKey);
   }
 
-  function startSharePngRender(
-    revision = sharePngRevisionRef.current,
-    previewSizeKey = getPreviewSizeKey(previewRef.current),
-  ): Promise<SharePngResult> {
-    const previewNode = previewRef.current;
-
-    if (!previewNode) {
-      return Promise.reject(new Error("The preview is not ready yet."));
-    }
-
-    const renderPromise = exporter(previewNode, {
-      draft,
-      size: "portrait",
-    })
-      .then((result) => {
-        if (
-          sharePngRevisionRef.current === revision &&
-          result.status === "success"
-        ) {
-          preparedSharePngRef.current = {
-            ...result,
-            previewSizeKey,
-          };
-        }
-
-        return result;
-      })
-      .finally(() => {
-        if (
-          sharePngRevisionRef.current === revision &&
-          pendingSharePngRef.current?.promise === renderPromise
-        ) {
-          pendingSharePngRef.current = null;
-        }
-      });
-
-    pendingSharePngRef.current = {
-      promise: renderPromise,
-      previewSizeKey,
-    };
-
-    return renderPromise;
-  }
-
-  function invalidateSharePngCache() {
-    sharePngRevisionRef.current += 1;
-    preparedSharePngRef.current = null;
-    pendingSharePngRef.current = null;
-
-    return sharePngRevisionRef.current;
-  }
-
   const isOutputDisabled =
     !draft.sourceUrl || isImporting || isExporting || isCopying;
+  const toast = status ? (
+    <div
+      className={`status-banner app-toast status-banner--${status.tone}${isStatusExiting ? " app-toast--exit" : ""}`}
+    >
+      {status.message}
+    </div>
+  ) : null;
 
   return (
     <main className="app-shell app-shell--minimal">
-      {status ? (
-        <div className="app-toast-layer" aria-live="polite">
-          <div
-            className={`status-banner app-toast status-banner--${status.tone}${isStatusExiting ? " app-toast--exit" : ""}`}
-            role="status"
-          >
-            {status.message}
-          </div>
+      {/* Live regions stay mounted so screen readers announce new messages. */}
+      <div className="app-toast-layer">
+        <div role="status">
+          {status && status.tone !== "error" ? toast : null}
         </div>
-      ) : null}
+        <div role="alert">{status?.tone === "error" ? toast : null}</div>
+      </div>
       <div className="app-layout app-layout--minimal">
         <div className="app-shell__inner">
           <section className="app-hero app-hero--minimal">
@@ -356,16 +382,24 @@ export default function App({
             <section className="control-panel control-panel--minimal">
               <form
                 className="import-shell"
+                // Links without https:// are accepted, so skip native URL validation.
+                noValidate
                 onSubmit={(event) => {
                   event.preventDefault();
                   void handleImport();
                 }}
               >
-                <label className="field">
-                  <span className="field__label">Tweet link</span>
+                <div className="field">
+                  <label className="field__label" htmlFor="tweet-url">
+                    Tweet link
+                  </label>
                   <div className="import-shell__row">
                     <input
-                      aria-label="Tweet link"
+                      id="tweet-url"
+                      type="url"
+                      inputMode="url"
+                      autoComplete="off"
+                      aria-describedby="tweet-url-hint"
                       className="field__input"
                       placeholder="https://x.com/user/status/..."
                       value={tweetUrl}
@@ -379,10 +413,10 @@ export default function App({
                       {isImporting ? "Importing…" : "Import tweet"}
                     </button>
                   </div>
-                  <span className="field__hint">
+                  <span className="field__hint" id="tweet-url-hint">
                     Paste a full X or Twitter status link.
                   </span>
-                </label>
+                </div>
               </form>
             </section>
 
@@ -426,6 +460,14 @@ export default function App({
               <a href="/privacy.html" className="app-link">
                 Privacy Policy
               </a>
+              <a
+                href="https://github.com/domechn/xshots"
+                className="app-link"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                ⭐ Star on GitHub
+              </a>
             </p>
           </footer>
         </div>
@@ -439,16 +481,14 @@ function buildFilename(sourceUrl: string): string {
   return statusId ? `tweet-${statusId}.png` : `tweet-${Date.now()}.png`;
 }
 
-function downloadDataUrl(dataUrl: string, filename: string) {
-  const blob = dataUrlToBlob(dataUrl);
-  // Prefer an object URL over a multi-megabyte data: URL: mobile browsers
-  // (notably iOS Safari) often refuse to download data: URLs whose payload
-  // exceeds a small size, or simply navigate to them instead of saving them.
-  const objectUrl = blob ? URL.createObjectURL(blob) : null;
-  const href = objectUrl ?? dataUrl;
+function downloadBlob(blob: Blob, filename: string) {
+  // An object URL rather than a multi-megabyte data: URL: mobile browsers
+  // (notably iOS Safari) often refuse to download large data: URLs, or simply
+  // navigate to them instead of saving them.
+  const objectUrl = URL.createObjectURL(blob);
 
   const link = document.createElement("a");
-  link.href = href;
+  link.href = objectUrl;
   link.download = filename;
   link.rel = "noopener";
 
@@ -460,44 +500,12 @@ function downloadDataUrl(dataUrl: string, filename: string) {
     link.click();
   } finally {
     document.body.removeChild(link);
-
-    if (objectUrl) {
-      // Defer revocation so the browser has time to start the download.
-      window.setTimeout(() => URL.revokeObjectURL(objectUrl), 4000);
-    }
+    // Defer revocation so the browser has time to start the download.
+    window.setTimeout(() => URL.revokeObjectURL(objectUrl), 4000);
   }
 }
 
-function dataUrlToBlob(dataUrl: string): Blob | null {
-  const match = dataUrl.match(/^data:([^;,]+)?(;base64)?,(.*)$/);
-
-  if (!match) {
-    return null;
-  }
-
-  const mimeType = match[1] || "application/octet-stream";
-  const isBase64 = Boolean(match[2]);
-  const payload = match[3] ?? "";
-
-  try {
-    if (isBase64) {
-      const binary = atob(payload);
-      const bytes = new Uint8Array(binary.length);
-
-      for (let index = 0; index < binary.length; index += 1) {
-        bytes[index] = binary.charCodeAt(index);
-      }
-
-      return new Blob([bytes], { type: mimeType });
-    }
-
-    return new Blob([decodeURIComponent(payload)], { type: mimeType });
-  } catch {
-    return null;
-  }
-}
-
-async function copyPngToClipboard(dataUrl: string) {
+async function copyPngToClipboard(png: Promise<Blob>) {
   if (
     typeof navigator === "undefined" ||
     !navigator.clipboard ||
@@ -507,17 +515,7 @@ async function copyPngToClipboard(dataUrl: string) {
     throw new Error("Clipboard image copy is not supported in this browser.");
   }
 
-  const blob = dataUrlToBlob(dataUrl);
-
-  if (!blob) {
-    throw new Error("The PNG could not be prepared for clipboard copy.");
-  }
-
-  await navigator.clipboard.write([
-    new ClipboardItem({
-      [blob.type || "image/png"]: blob,
-    }),
-  ]);
+  await navigator.clipboard.write([new ClipboardItem({ "image/png": png })]);
 }
 
 function getPreviewSizeKey(node: HTMLElement | null): string | null {

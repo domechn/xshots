@@ -10,6 +10,8 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import App from "./App";
 
+const PNG_BLOB = new Blob(["png"], { type: "image/png" });
+
 afterEach(() => {
   vi.useRealTimers();
   vi.restoreAllMocks();
@@ -247,7 +249,7 @@ describe("App", () => {
     });
     const exporter = vi.fn().mockResolvedValue({
       status: "success",
-      dataUrl: "data:image/png;base64,Zm9v",
+      blob: PNG_BLOB,
     });
     const clipboardWriter = vi.fn().mockResolvedValue(undefined);
 
@@ -276,7 +278,91 @@ describe("App", () => {
     await user.click(screen.getByRole("button", { name: "Copy to clipboard" }));
 
     expect(exporter).toHaveBeenCalledTimes(1);
-    expect(clipboardWriter).toHaveBeenCalledWith("data:image/png;base64,Zm9v");
+    await expect(clipboardWriter.mock.calls[0][0]).resolves.toBe(PNG_BLOB);
+  });
+
+  it("starts the clipboard write inside the click before the PNG finishes rendering", async () => {
+    const user = userEvent.setup();
+    const importer = vi.fn().mockResolvedValue({
+      status: "success",
+      draft: {
+        sourceUrl: "https://x.com/SpaceX/status/1915324363727337943",
+        body: "Clipboard ready.",
+      },
+    });
+    let finishRender: () => void = () => undefined;
+    const exporter = vi.fn(
+      () =>
+        new Promise<{ status: "success"; blob: Blob }>((resolve) => {
+          finishRender = () => resolve({ status: "success", blob: PNG_BLOB });
+        }),
+    );
+    const clipboardWriter = vi.fn(async (png: Promise<Blob>) => {
+      await png;
+    });
+
+    render(
+      <App
+        importer={importer}
+        exporter={exporter}
+        clipboardWriter={clipboardWriter}
+      />,
+    );
+
+    await user.type(
+      screen.getByLabelText("Tweet link"),
+      "https://x.com/SpaceX/status/1915324363727337943",
+    );
+    await user.click(screen.getByRole("button", { name: "Import tweet" }));
+    await waitFor(() => {
+      expect(exporter).toHaveBeenCalledTimes(1);
+    });
+
+    await user.click(screen.getByRole("button", { name: "Copy to clipboard" }));
+
+    expect(clipboardWriter).toHaveBeenCalledTimes(1);
+    act(() => finishRender());
+    expect(await screen.findByRole("status")).toHaveTextContent(
+      "PNG copied to the clipboard.",
+    );
+  });
+
+  it("announces copy failures through an alert region", async () => {
+    const user = userEvent.setup();
+    const importer = vi.fn().mockResolvedValue({
+      status: "success",
+      draft: {
+        sourceUrl: "https://x.com/SpaceX/status/1915324363727337943",
+        body: "Clipboard ready.",
+      },
+    });
+    const exporter = vi.fn().mockResolvedValue({
+      status: "success",
+      blob: PNG_BLOB,
+    });
+    const clipboardWriter = vi
+      .fn()
+      .mockRejectedValue(new Error("Clipboard permission denied."));
+
+    render(
+      <App
+        importer={importer}
+        exporter={exporter}
+        clipboardWriter={clipboardWriter}
+      />,
+    );
+
+    await user.type(
+      screen.getByLabelText("Tweet link"),
+      "https://x.com/SpaceX/status/1915324363727337943",
+    );
+    await user.click(screen.getByRole("button", { name: "Import tweet" }));
+    await user.click(screen.getByRole("button", { name: "Copy to clipboard" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Clipboard permission denied.",
+    );
+    expect(screen.getByRole("status")).toBeEmptyDOMElement();
   });
 
   it("copies the prepared PNG without refetching the data url", async () => {
@@ -304,7 +390,7 @@ describe("App", () => {
     });
     const exporter = vi.fn().mockResolvedValue({
       status: "success",
-      dataUrl: "data:image/png;base64,Zm9v",
+      blob: PNG_BLOB,
     });
     const writeMock = vi.fn().mockResolvedValue(undefined);
     const fetchSpy = vi
@@ -314,7 +400,7 @@ describe("App", () => {
     const originalClipboardItem = globalThis.ClipboardItem;
 
     class ClipboardItemMock {
-      constructor(readonly items: Record<string, Blob>) {}
+      constructor(readonly items: Record<string, Promise<Blob>>) {}
     }
 
     Object.defineProperty(navigator, "clipboard", {
@@ -356,9 +442,9 @@ describe("App", () => {
 
       expect(fetchSpy).not.toHaveBeenCalled();
       expect(writeMock.mock.calls[0][0]).toHaveLength(1);
-      expect(
+      await expect(
         (writeMock.mock.calls[0][0][0] as ClipboardItemMock).items["image/png"],
-      ).toBeInstanceOf(Blob);
+      ).resolves.toBe(PNG_BLOB);
     } finally {
       Object.defineProperty(navigator, "clipboard", {
         configurable: true,
@@ -396,7 +482,7 @@ describe("App", () => {
     });
     const exporter = vi.fn().mockResolvedValue({
       status: "success",
-      dataUrl: "data:image/png;base64,Zm9v",
+      blob: PNG_BLOB,
     });
     const createObjectUrlSpy = vi
       .spyOn(URL, "createObjectURL")
@@ -454,12 +540,11 @@ describe("App", () => {
         bookmarkCount: null,
       },
     });
+    const firstBlob = new Blob(["first"], { type: "image/png" });
+    const secondBlob = new Blob(["second"], { type: "image/png" });
     const exporter = vi.fn(async (node: HTMLElement) => ({
       status: "success" as const,
-      dataUrl:
-        node.offsetHeight >= 1200
-          ? "data:image/png;base64,c2Vjb25k"
-          : "data:image/png;base64,Zmlyc3Q=",
+      blob: node.offsetHeight >= 1200 ? secondBlob : firstBlob,
     }));
     const clipboardWriter = vi.fn().mockResolvedValue(undefined);
     const { container } = render(
@@ -476,7 +561,7 @@ describe("App", () => {
       throw new Error("Expected preview capture node.");
     }
 
-    let previewWidth = 540;
+    const previewWidth = 540;
     let previewHeight = 900;
 
     Object.defineProperty(capture, "offsetWidth", {
@@ -523,9 +608,7 @@ describe("App", () => {
       );
 
       expect(exporter).toHaveBeenCalledTimes(2);
-      expect(clipboardWriter).toHaveBeenCalledWith(
-        "data:image/png;base64,c2Vjb25k",
-      );
+      await expect(clipboardWriter.mock.calls[0][0]).resolves.toBe(secondBlob);
     } finally {
       resizeObserver.restore();
     }
@@ -549,7 +632,7 @@ describe("App", () => {
     });
     const exporter = vi.fn().mockResolvedValue({
       status: "success",
-      dataUrl: "data:image/png;base64,Zm9v",
+      blob: PNG_BLOB,
     });
 
     const createObjectUrlSpy = vi
@@ -646,6 +729,6 @@ describe("App", () => {
       vi.advanceTimersByTime(4200);
     });
 
-    expect(screen.queryByRole("status")).not.toBeInTheDocument();
+    expect(screen.getByRole("status")).toBeEmptyDOMElement();
   });
 });

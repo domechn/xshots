@@ -682,4 +682,49 @@ describe("importTweetFromUrl", () => {
     expect(result.reason).toContain("could not read the tweet text");
     expect(result.draft.handle).toBe("nasa");
   });
+
+  it("keeps the URL handle when the rich payload has an empty author handle", async () => {
+    const result = await importTweetFromUrl(
+      "https://x.com/SpaceX/status/1915324363727337943",
+      {
+        fetcher: async () => ({
+          ok: true,
+          status: 200,
+          json: async () => ({
+            status: {
+              text: "Booster landing confirmed.",
+              author: { name: "  ", screen_name: "" },
+            },
+          }),
+        }),
+      },
+    );
+
+    expect(result.status).toBe("success");
+    expect(result.draft.handle).toBe("SpaceX");
+    expect(result.draft.authorName).toBe("SpaceX");
+  });
+
+  it("keeps the URL handle when oEmbed returns an empty author name", async () => {
+    const result = await importTweetFromUrl(
+      "https://x.com/SpaceX/status/1915324363727337943",
+      {
+        fetcher: async (input) =>
+          input.includes("fxtwitter")
+            ? { ok: false, status: 404, json: async () => ({}) }
+            : {
+                ok: true,
+                status: 200,
+                json: async () => ({
+                  author_name: "",
+                  html: "<blockquote><p>Liftoff.</p></blockquote>",
+                }),
+              },
+      },
+    );
+
+    expect(result.status).toBe("success");
+    expect(result.draft.handle).toBe("SpaceX");
+    expect(result.draft.authorName).toBe("SpaceX");
+  });
 });
