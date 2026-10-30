@@ -51,6 +51,28 @@ export async function exportTweetCardToPng(
 
   for (const [index, resolvedUrl] of resolvedUrls.entries()) {
     if (!resolvedUrl) {
+      const failedUrl = remoteAssets[index];
+      const images = Array.from(node.querySelectorAll("img")).filter(
+        (image) =>
+          (image.currentSrc || image.getAttribute("src")) === failedUrl,
+      );
+
+      if (
+        images.length &&
+        images.every(
+          (image) =>
+            image.classList.contains("tweet-card__avatar") ||
+            image.classList.contains("tweet-card__quote-avatar"),
+        )
+      ) {
+        images.forEach((image) => image.dispatchEvent(new Event("error")));
+        await waitForNextPaint();
+
+        if (images.every((image) => !node.contains(image))) {
+          continue;
+        }
+      }
+
       return {
         status: "blocked",
         message:
@@ -137,8 +159,8 @@ function resolveCanvasSize(
   };
 }
 
-// The only retry layer: a cached copy may lack CORS headers (it was loaded by
-// a plain <img>), so fall back to a fresh network request.
+// A cached copy may lack CORS headers, so retry from the network before
+// resorting to the public proxy.
 async function defaultResolveAssetUrl(url: string): Promise<string | null> {
   for (const cacheMode of ["force-cache", "reload"] as const) {
     try {
@@ -160,6 +182,23 @@ async function defaultResolveAssetUrl(url: string): Promise<string | null> {
     }
   }
 
+  try {
+    const response = await fetch(
+      `https://wsrv.nl/?url=${encodeURIComponent(url)}`,
+      {
+        method: "GET",
+        mode: "cors",
+        signal: AbortSignal.timeout(ASSET_FETCH_TIMEOUT_MS),
+      },
+    );
+
+    if (response.ok) {
+      return await blobToDataUrl(await response.blob());
+    }
+  } catch {
+    // The caller handles assets that remain unavailable.
+  }
+
   return null;
 }
 
@@ -168,7 +207,11 @@ function collectAssetUrls(node: HTMLElement, draft: TweetDraft): string[] {
     .map((image) => image.currentSrc || image.getAttribute("src") || "")
     .filter(Boolean);
 
-  if (renderedAssetUrls.length) {
+  if (
+    renderedAssetUrls.length ||
+    node.matches(".tweet-card") ||
+    node.querySelector(".tweet-card")
+  ) {
     return Array.from(new Set(renderedAssetUrls));
   }
 

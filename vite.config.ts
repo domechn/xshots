@@ -1,15 +1,15 @@
 import { defineConfig } from "vitest/config";
 import react from "@vitejs/plugin-react";
 
-// Hosts fetched at runtime: the import APIs, plus twimg images that export
-// re-fetches with CORS to inline them into the PNG.
+// Hosts fetched at runtime: the import APIs, twimg images, and the image proxy
+// used when direct image fetches fail during export.
 const CONTENT_SECURITY_POLICY = [
   "default-src 'self'",
   "script-src 'self'",
   "style-src 'self' 'unsafe-inline'",
   "img-src 'self' https: data: blob:",
   "font-src 'self' data:",
-  "connect-src 'self' https://api.fxtwitter.com https://publish.twitter.com https://*.twimg.com",
+  "connect-src 'self' https://api.fxtwitter.com https://publish.twitter.com https://*.twimg.com https://wsrv.nl",
   "object-src 'none'",
   "base-uri 'self'",
   "form-action 'self'",

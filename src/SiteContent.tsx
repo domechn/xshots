@@ -13,7 +13,7 @@ export const FAQ_ITEMS = [
   {
     question: "Does XShots upload my data?",
     answer:
-      "No. XShots has no backend. Your browser fetches the post from the public FxTwitter API (or Twitter's oEmbed endpoint as a fallback) and renders the PNG locally. Nothing is stored on a server.",
+      "No. XShots has no backend. Your browser fetches the post from the public FxTwitter API (or Twitter's oEmbed endpoint as a fallback) and renders the PNG locally. If a direct image fetch fails, XShots tries wsrv.nl as a fallback proxy. Nothing is stored by XShots.",
   },
   {
     question: "What image quality do I get?",

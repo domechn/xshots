@@ -17,6 +17,7 @@ type TweetCardProps = {
 };
 
 export function TweetCard({ draft }: TweetCardProps) {
+  const [failedAvatarUrl, setFailedAvatarUrl] = useState<string | null>(null);
   const avatarFallback =
     draft.authorName.slice(0, 1) || draft.handle.slice(0, 1) || "X";
   const siteUrl = "xshots.domc.me";
@@ -42,11 +43,14 @@ export function TweetCard({ draft }: TweetCardProps) {
       <div className="tweet-card__orbit" aria-hidden="true" />
       <header className="tweet-card__header">
         <div className="tweet-card__avatar-shell">
-          {draft.avatarUrl ? (
+          {draft.avatarUrl && draft.avatarUrl !== failedAvatarUrl ? (
             <img
               className="tweet-card__avatar"
               src={draft.avatarUrl}
               alt={`${draft.authorName} avatar`}
+              crossOrigin="anonymous"
+              referrerPolicy="no-referrer"
+              onError={() => setFailedAvatarUrl(draft.avatarUrl)}
             />
           ) : (
             <div
@@ -99,6 +103,7 @@ export function TweetCard({ draft }: TweetCardProps) {
 }
 
 function QuotedTweetCard({ tweet }: { tweet: EmbeddedTweet }) {
+  const [failedAvatarUrl, setFailedAvatarUrl] = useState<string | null>(null);
   const avatarFallback =
     tweet.authorName.slice(0, 1) || tweet.handle.slice(0, 1) || "X";
   const mediaUrls = tweet.mediaUrls.length
@@ -118,11 +123,14 @@ function QuotedTweetCard({ tweet }: { tweet: EmbeddedTweet }) {
     <section className={quoteClassName} aria-label="Quoted tweet preview">
       <div className="tweet-card__quote-header">
         <div className="tweet-card__quote-avatar-shell">
-          {tweet.avatarUrl ? (
+          {tweet.avatarUrl && tweet.avatarUrl !== failedAvatarUrl ? (
             <img
               className="tweet-card__quote-avatar"
               src={tweet.avatarUrl}
               alt={`${tweet.authorName} avatar`}
+              crossOrigin="anonymous"
+              referrerPolicy="no-referrer"
+              onError={() => setFailedAvatarUrl(tweet.avatarUrl)}
             />
           ) : (
             <div
@@ -241,6 +249,8 @@ function MediaGallery({
             }
             src={mediaUrl}
             alt={alt}
+            crossOrigin="anonymous"
+            referrerPolicy="no-referrer"
             ref={isSingleImage ? singleImageRef : undefined}
             onLoad={handleImageLoad}
           />

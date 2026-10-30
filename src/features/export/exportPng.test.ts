@@ -338,6 +338,44 @@ describe("exportTweetCardToPng", () => {
     }
   });
 
+  it("inlines an image through wsrv.nl after both direct fetches fail", async () => {
+    const url = "https://pbs.twimg.com/profile_images/a b/avatar.jpg";
+    const node = document.createElement("div");
+    node.innerHTML = `<img alt="avatar" src="${url}">`;
+    const fetchSpy = vi
+      .spyOn(globalThis, "fetch")
+      .mockRejectedValueOnce(new TypeError("CORS"))
+      .mockRejectedValueOnce(new TypeError("CORS"))
+      .mockResolvedValueOnce({
+        ok: true,
+        blob: async () => new Blob(["avatar"], { type: "image/png" }),
+      } as Response);
+
+    try {
+      const toBlob = vi.fn(async (element: HTMLElement) => {
+        expect(element.querySelector("img")?.getAttribute("src")).toBe(
+          "data:image/png;base64,YXZhdGFy",
+        );
+        return PNG_BLOB;
+      });
+
+      await expect(
+        exportTweetCardToPng(node, {
+          draft: createEmptyDraft({ avatarUrl: url }),
+          toBlob,
+        }),
+      ).resolves.toEqual({ status: "success", blob: PNG_BLOB });
+      expect(fetchSpy.mock.calls.map(([requestUrl]) => requestUrl)).toEqual([
+        url,
+        url,
+        `https://wsrv.nl/?url=${encodeURIComponent(url)}`,
+      ]);
+      expect(toBlob).toHaveBeenCalledOnce();
+    } finally {
+      fetchSpy.mockRestore();
+    }
+  });
+
   it("resolves remote assets in parallel", async () => {
     const node = document.createElement("div");
     node.innerHTML = `

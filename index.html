@@ -81,7 +81,7 @@
           {
             "@type": "Question",
             "name": "Does XShots upload my data?",
-            "acceptedAnswer": { "@type": "Answer", "text": "No. XShots has no backend. Your browser fetches the post from the public FxTwitter API (or Twitter's oEmbed endpoint as a fallback) and renders the PNG locally. Nothing is stored on a server." }
+            "acceptedAnswer": { "@type": "Answer", "text": "No. XShots has no backend. Your browser fetches the post from the public FxTwitter API (or Twitter's oEmbed endpoint as a fallback) and renders the PNG locally. If a direct image fetch fails, XShots tries wsrv.nl as a fallback proxy. Nothing is stored by XShots." }
           },
           {
             "@type": "Question",
@@ -134,7 +134,7 @@
         <h3>Which links are supported?</h3>
         <p>Any x.com or twitter.com post link, including mobile.twitter.com links, /i/web/status/ links and links pasted without https://.</p>
         <h3>Does XShots upload my data?</h3>
-        <p>No. XShots has no backend. Your browser fetches the post from the public FxTwitter API (or Twitter's oEmbed endpoint as a fallback) and renders the PNG locally. Nothing is stored on a server.</p>
+        <p>No. XShots has no backend. Your browser fetches the post from the public FxTwitter API (or Twitter's oEmbed endpoint as a fallback) and renders the PNG locally. If a direct image fetch fails, XShots tries wsrv.nl as a fallback proxy. Nothing is stored by XShots.</p>
         <h3>What image quality do I get?</h3>
         <p>Images are exported as lossless PNG files at 1.5x pixel density (1800 px wide for landscape, 1620 px for portrait), so text and photos stay sharp.</p>
         <h3>Are quoted tweets and multiple images included?</h3>

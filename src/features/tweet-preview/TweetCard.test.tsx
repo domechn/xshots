@@ -1,6 +1,7 @@
 import { fireEvent, render, screen } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import "../../app.css";
+import { exportTweetCardToPng } from "../export/exportPng";
 import { createEmptyDraft } from "../tweet-import/types";
 import { TweetCard } from "./TweetCard";
 
@@ -68,6 +69,177 @@ describe("TweetCard", () => {
     expect(
       screen.getByRole("img", { name: "Tweet media preview" }),
     ).toHaveAttribute("src", "data:image/png;base64,xyz");
+  });
+
+  it("uses initials when the main or quoted avatar fails", () => {
+    const { container } = render(
+      <TweetCard
+        draft={createEmptyDraft({
+          authorName: "SpaceX",
+          avatarUrl: "https://pbs.twimg.com/profile_images/main.jpg",
+          quotedTweet: {
+            sourceUrl: "",
+            authorName: "NASA",
+            handle: "NASA",
+            body: "Launch update",
+            bodyHtml: "",
+            timestampLabel: "",
+            avatarUrl: "https://pbs.twimg.com/profile_images/quote.jpg",
+            mediaUrl: "",
+            mediaUrls: [],
+            verified: false,
+          },
+        })}
+      />,
+    );
+
+    fireEvent.error(screen.getByRole("img", { name: "SpaceX avatar" }));
+    fireEvent.error(screen.getByRole("img", { name: "NASA avatar" }));
+
+    expect(screen.queryByRole("img", { name: "SpaceX avatar" })).toBeNull();
+    expect(screen.queryByRole("img", { name: "NASA avatar" })).toBeNull();
+    expect(
+      container.querySelector(".tweet-card__avatar--fallback"),
+    ).toHaveTextContent("S");
+    expect(
+      container.querySelector(".tweet-card__quote-avatar--fallback"),
+    ).toHaveTextContent("N");
+  });
+
+  it("requests remote avatars and media without a referrer and with CORS", () => {
+    render(
+      <TweetCard
+        draft={createEmptyDraft({
+          authorName: "SpaceX",
+          avatarUrl: "https://pbs.twimg.com/profile_images/main.jpg",
+          mediaUrl: "https://pbs.twimg.com/media/main.jpg",
+          quotedTweet: {
+            sourceUrl: "",
+            authorName: "NASA",
+            handle: "NASA",
+            body: "Launch update",
+            bodyHtml: "",
+            timestampLabel: "",
+            avatarUrl: "https://pbs.twimg.com/profile_images/quote.jpg",
+            mediaUrl: "https://pbs.twimg.com/media/quote.jpg",
+            mediaUrls: [],
+            verified: false,
+          },
+        })}
+      />,
+    );
+
+    for (const image of screen.getAllByRole("img")) {
+      expect(image).toHaveAttribute("crossorigin", "anonymous");
+      expect(image).toHaveAttribute("referrerpolicy", "no-referrer");
+    }
+  });
+
+  it("exports initials when an avatar is the only image and it failed", async () => {
+    const draft = createEmptyDraft({
+      authorName: "SpaceX",
+      avatarUrl: "https://pbs.twimg.com/profile_images/main.jpg",
+    });
+    const { container } = render(<TweetCard draft={draft} />);
+    fireEvent.error(screen.getByRole("img", { name: "SpaceX avatar" }));
+    const fetchSpy = vi.spyOn(globalThis, "fetch");
+    const blob = new Blob(["png"], { type: "image/png" });
+
+    try {
+      const result = await exportTweetCardToPng(
+        container.querySelector(".tweet-card") as HTMLElement,
+        {
+          draft,
+          toBlob: async (node) => {
+            expect(
+              node.querySelector(".tweet-card__avatar--fallback"),
+            ).toHaveTextContent("S");
+            expect(node.querySelector("img")).toBeNull();
+            return blob;
+          },
+        },
+      );
+
+      expect(result).toEqual({ status: "success", blob });
+      expect(fetchSpy).not.toHaveBeenCalled();
+    } finally {
+      fetchSpy.mockRestore();
+    }
+  });
+
+  it("exports initials when all avatar fetch attempts fail", async () => {
+    const draft = createEmptyDraft({
+      authorName: "SpaceX",
+      avatarUrl: "https://pbs.twimg.com/profile_images/main.jpg",
+    });
+    const { container } = render(<TweetCard draft={draft} />);
+    const fetchSpy = vi
+      .spyOn(globalThis, "fetch")
+      .mockRejectedValue(new TypeError("Image unavailable"));
+    const blob = new Blob(["png"], { type: "image/png" });
+
+    try {
+      const result = await exportTweetCardToPng(container, {
+        draft,
+        toBlob: async (node) => {
+          expect(
+            node.querySelector(".tweet-card__avatar--fallback"),
+          ).toHaveTextContent("S");
+          expect(node.querySelector("img")).toBeNull();
+          return blob;
+        },
+      });
+
+      expect(result).toEqual({ status: "success", blob });
+      expect(fetchSpy).toHaveBeenCalledTimes(3);
+      expect(screen.queryByRole("img", { name: "SpaceX avatar" })).toBeNull();
+    } finally {
+      fetchSpy.mockRestore();
+    }
+  });
+
+  it("replaces both avatars when they share an unavailable image URL", async () => {
+    const avatarUrl = "https://pbs.twimg.com/profile_images/shared.jpg";
+    const draft = createEmptyDraft({
+      authorName: "SpaceX",
+      avatarUrl,
+      quotedTweet: {
+        sourceUrl: "",
+        authorName: "NASA",
+        handle: "NASA",
+        body: "Launch update",
+        bodyHtml: "",
+        timestampLabel: "",
+        avatarUrl,
+        mediaUrl: "",
+        mediaUrls: [],
+        verified: false,
+      },
+    });
+    const { container } = render(<TweetCard draft={draft} />);
+    const fetchSpy = vi
+      .spyOn(globalThis, "fetch")
+      .mockRejectedValue(new TypeError("Image unavailable"));
+
+    try {
+      const result = await exportTweetCardToPng(container, {
+        draft,
+        toBlob: async (node) => {
+          expect(node.querySelectorAll("img")).toHaveLength(0);
+          expect(
+            node.querySelector(".tweet-card__avatar--fallback"),
+          ).toHaveTextContent("S");
+          expect(
+            node.querySelector(".tweet-card__quote-avatar--fallback"),
+          ).toHaveTextContent("N");
+          return new Blob(["png"], { type: "image/png" });
+        },
+      });
+
+      expect(result.status).toBe("success");
+    } finally {
+      fetchSpy.mockRestore();
+    }
   });
 
   it("renders every imported media image when multiple photos are present", () => {
