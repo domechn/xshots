@@ -75,7 +75,7 @@ describe("importTweetFromUrl", () => {
     expect(result.draft.mediaUrls).toEqual([]);
   });
 
-  it("keeps a tweet's own text ahead of its article and clamps a long preview", async () => {
+  it("keeps the full preview when article blocks are unavailable", async () => {
     const result = await importTweetFromUrl(
       "https://x.com/binancezh/status/2117448637127233906",
       {
@@ -101,8 +101,126 @@ describe("importTweetFromUrl", () => {
 
     expect(result.status).toBe("success");
     expect(result.draft.body).toBe(
-      `My take: read this\n\nArticle headline\n\n${"A".repeat(280)}…`,
+      `Article headline\n\n${"A".repeat(400)}\n\nMy take: read this`,
     );
+  });
+
+  it("imports every article block with UTF-16 emphasis and inline media", async () => {
+    const result = await importTweetFromUrl(
+      "https://x.com/binancezh/status/2117448637127233906",
+      {
+        fetcher: async () => ({
+          ok: true,
+          status: 200,
+          json: async () => ({
+            status: {
+              text: "https://x.com/i/article/2117447529424203776",
+              article: {
+                title: "Title <safe>",
+                preview_text: "Old preview",
+                cover_media: {
+                  media_info: { original_img_url: "https://img.test/cover.jpg" },
+                },
+                media_entities: [
+                  {
+                    media_id: "one",
+                    media_info: { original_img_url: "https://img.test/one.jpg" },
+                  },
+                  {
+                    media_id: "two",
+                    media_info: { original_img_url: "https://img.test/two.jpg" },
+                  },
+                ],
+                content: {
+                  blocks: [
+                    {
+                      type: "unstyled",
+                      text: "🚀Bold & <real> end",
+                      inlineStyleRanges: [
+                        { style: "Bold", offset: 2, length: 13 },
+                        { style: "Italic", offset: 9, length: 6 },
+                      ],
+                    },
+                    { type: "header-two", text: "Section" },
+                    { type: "unordered-list-item", text: "First" },
+                    { type: "unordered-list-item", text: "Second" },
+                    { type: "ordered-list-item", text: "Numbered" },
+                    { type: "blockquote", text: "Quoted\nline" },
+                    { type: "atomic", text: "", entityRanges: [{ key: 7, offset: 0, length: 1 }] },
+                    { type: "atomic", text: "", entityRanges: [{ key: 8, offset: 0, length: 1 }] },
+                    { type: "unstyled", text: "Final paragraph." },
+                  ],
+                  entityMap: [
+                    { key: 7, value: { type: "MEDIA", data: { mediaItems: [{ mediaId: "one" }] } } },
+                    { key: 8, value: { type: "MEDIA", data: { mediaItems: [{ mediaId: "two" }] } } },
+                  ],
+                },
+              },
+            },
+          }),
+        }),
+      },
+    );
+
+    expect(result.status).toBe("success");
+    expect(result.draft.body).toBe(
+      "Title <safe>\n\n🚀Bold & <real> end\n\nSection\n\n• First\n• Second\n\n1. Numbered\n\nQuoted\nline\n\nFinal paragraph.",
+    );
+    expect(result.draft.bodyHtml).toBe(
+      "<strong>Title &lt;safe&gt;</strong><br><br>🚀<strong>Bold &amp; <em>&lt;real&gt;</em></strong> end<br><br><strong>Section</strong><br><br>• First<br>• Second<br><br>1. Numbered<br><br>Quoted<br>line<br><br>Final paragraph.",
+    );
+    expect(result.draft.mediaUrls).toEqual([
+      "https://img.test/cover.jpg",
+      "https://img.test/one.jpg",
+      "https://img.test/two.jpg",
+    ]);
+  });
+
+  it("ignores incomplete article entities and limits images to four", async () => {
+    const result = await importTweetFromUrl(
+      "https://x.com/binancezh/status/2117448637127233906",
+      {
+        fetcher: async () => ({
+          ok: true,
+          status: 200,
+          json: async () => ({
+            status: {
+              article: {
+                title: "Gallery",
+                cover_media: { media_info: { original_img_url: "https://img.test/cover.jpg" } },
+                media_entities: [1, 2, 3, 4].map((id) => ({
+                  media_id: id,
+                  media_info: { original_img_url: `https://img.test/${id}.jpg` },
+                })),
+                content: {
+                  blocks: [
+                    { type: "unstyled", text: "Complete body", inlineStyleRanges: [{ style: "Bold", offset: -1, length: 99 }] },
+                    { type: "atomic", entityRanges: [{ key: 0 }] },
+                    { type: "atomic", entityRanges: [{ key: 1 }] },
+                    { type: "atomic", entityRanges: [{ key: 2 }] },
+                  ],
+                  entityMap: [
+                    { key: 0, value: { type: "MEDIA", data: { mediaItems: [1, 2].map((mediaId) => ({ mediaId })) } } },
+                    { key: 1, value: { type: "MEDIA", data: { mediaItems: [3, 4].map((mediaId) => ({ mediaId })) } } },
+                    { key: 2, value: { type: "MEDIA", data: {} } },
+                  ],
+                },
+              },
+            },
+          }),
+        }),
+      },
+    );
+
+    expect(result.status).toBe("success");
+    expect(result.draft.body).toBe("Gallery\n\nComplete body");
+    expect(result.draft.bodyHtml).toBe("<strong>Gallery</strong><br><br>Complete body");
+    expect(result.draft.mediaUrls).toEqual([
+      "https://img.test/cover.jpg",
+      "https://img.test/1.jpg",
+      "https://img.test/2.jpg",
+      "https://img.test/3.jpg",
+    ]);
   });
 
   it("keeps article tweet text when article details and cover are absent", async () => {

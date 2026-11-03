@@ -303,6 +303,33 @@ describe("TweetCard", () => {
     );
   });
 
+  it("renders and exports the full article text without an HTML injection or main body clamp", async () => {
+    const ending = "Final article paragraph after the long body.";
+    const draft = createEmptyDraft({
+      body: `Article\n\n${"A".repeat(500)}\n\n${ending}`,
+      bodyHtml: `<strong>Article</strong><br><br><em>${"A".repeat(500)}</em><br><br>${ending}<img src=x onerror=alert(1)>`,
+    });
+    const { container } = render(<TweetCard draft={draft} />);
+    const card = container.querySelector(".tweet-card") as HTMLElement;
+    const text = container.querySelector(".tweet-card__text") as HTMLElement;
+
+    expect(text.textContent).toContain(ending);
+    expect(text.querySelector("em")?.textContent).toHaveLength(500);
+    expect(text.querySelector("img")).toBeNull();
+    expect(text.className).toBe("tweet-card__text");
+    expect(window.getComputedStyle(text).whiteSpace).toBe("pre-wrap");
+
+    const blob = new Blob(["png"], { type: "image/png" });
+    const result = await exportTweetCardToPng(card, {
+      draft,
+      toBlob: async (node) => {
+        expect(node.querySelector(".tweet-card__text")?.textContent).toContain(ending);
+        return blob;
+      },
+    });
+    expect(result).toEqual({ status: "success", blob });
+  });
+
   it("renders reply, repost, like, and bookmark actions in x order", () => {
     const { container } = render(
       <TweetCard
