@@ -33,6 +33,15 @@ type RichTweetStatus = RichTweetMetrics & {
   raw_text?: {
     text?: string;
   };
+  article?: {
+    title?: string;
+    preview_text?: string;
+    cover_media?: {
+      media_info?: {
+        original_img_url?: string;
+      };
+    };
+  };
   created_at?: string;
   url?: string;
   tweet_url?: string;
@@ -549,16 +558,26 @@ function extractEmbeddedTweet(
     return null;
   }
 
-  const mediaUrls = extractPhotoMediaUrls(status);
-  const mediaUrl = mediaUrls[0] ?? extractFallbackMediaUrl(status);
-  const hasMedia = mediaUrls.length > 0 || Boolean(mediaUrl);
-  const body = normalizeTweetText(
-    stripMediaLinksFromText(
-      status.raw_text?.text ?? status.text ?? "",
-      extractMediaTextUrls(status),
-      hasMedia,
-    ),
+  const articleCoverUrl = normalizeAssetUrl(
+    status.article?.cover_media?.media_info?.original_img_url ?? "",
   );
+  const mediaUrls = status.article
+    ? articleCoverUrl
+      ? [articleCoverUrl]
+      : []
+    : extractPhotoMediaUrls(status);
+  const mediaUrl =
+    mediaUrls[0] ?? (status.article ? "" : extractFallbackMediaUrl(status));
+  const hasMedia = mediaUrls.length > 0 || Boolean(mediaUrl);
+  const body = status.article
+    ? extractArticleBody(status)
+    : normalizeTweetText(
+        stripMediaLinksFromText(
+          status.raw_text?.text ?? status.text ?? "",
+          extractMediaTextUrls(status),
+          hasMedia,
+        ),
+      );
 
   if (!body && !mediaUrl && !mediaUrls.length) {
     return null;
@@ -576,6 +595,28 @@ function extractEmbeddedTweet(
     mediaUrls,
     verified: Boolean(status.author?.verification?.verified),
   };
+}
+
+function extractArticleBody(status: RichTweetStatus): string {
+  const tweetText = normalizeTweetText(
+    (status.text ?? status.raw_text?.text ?? "")
+      .replace(
+        /https?:\/\/(?:www\.)?(?:x|twitter)\.com\/i\/article\/\d+\S*/g,
+        "",
+      )
+      .replace(/\s*https?:\/\/t\.co\/\S+$/, ""),
+  );
+  const preview = normalizeTweetText(status.article?.preview_text ?? "");
+  const clampedPreview =
+    preview.length > 280 ? `${preview.slice(0, 280).trimEnd()}…` : preview;
+
+  return [
+    tweetText,
+    normalizeTweetText(status.article?.title ?? ""),
+    clampedPreview,
+  ]
+    .filter(Boolean)
+    .join("\n\n");
 }
 
 function extractPhotoMediaUrls(status: RichTweetStatus): string[] {

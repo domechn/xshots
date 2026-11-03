@@ -2,6 +2,131 @@ import { describe, expect, it } from "vitest";
 import { importTweetFromUrl } from "./importTweet";
 
 describe("importTweetFromUrl", () => {
+  it("imports an article title, preview, and normalized cover instead of its links", async () => {
+    const result = await importTweetFromUrl(
+      "https://x.com/binancezh/status/2117448637127233906",
+      {
+        fetcher: async () => ({
+          ok: true,
+          status: 200,
+          json: async () => ({
+            code: 200,
+            status: {
+              text: "https://x.com/i/article/2117447529424203776",
+              raw_text: { text: "https://t.co/article123" },
+              media: {},
+              article: {
+                title: "Article headline",
+                preview_text: "A short summary of the article.",
+                cover_media: {
+                  media_info: {
+                    original_img_url: "http://pbs.twimg.com/media/cover.jpg",
+                  },
+                },
+                content: { blocks: [] },
+                media_entities: [],
+              },
+              author: { name: "Binance", screen_name: "binancezh" },
+            },
+          }),
+        }),
+      },
+    );
+
+    expect(result.status).toBe("success");
+    expect(result.draft.body).toBe(
+      "Article headline\n\nA short summary of the article.",
+    );
+    expect(result.draft.mediaUrl).toBe(
+      "https://pbs.twimg.com/media/cover.jpg",
+    );
+    expect(result.draft.mediaUrls).toEqual([
+      "https://pbs.twimg.com/media/cover.jpg",
+    ]);
+  });
+
+  it("imports article text when cover media is missing", async () => {
+    const result = await importTweetFromUrl(
+      "https://x.com/binancezh/status/2117448637127233906",
+      {
+        fetcher: async () => ({
+          ok: true,
+          status: 200,
+          json: async () => ({
+            status: {
+              text: "https://x.com/i/article/2117447529424203776",
+              raw_text: { text: "https://t.co/article123" },
+              media: {},
+              article: {
+                title: "Article headline",
+                preview_text: "A short summary.",
+                content: { blocks: [] },
+                media_entities: [],
+              },
+            },
+          }),
+        }),
+      },
+    );
+
+    expect(result.status).toBe("success");
+    expect(result.draft.body).toBe("Article headline\n\nA short summary.");
+    expect(result.draft.mediaUrl).toBe("");
+    expect(result.draft.mediaUrls).toEqual([]);
+  });
+
+  it("keeps a tweet's own text ahead of its article and clamps a long preview", async () => {
+    const result = await importTweetFromUrl(
+      "https://x.com/binancezh/status/2117448637127233906",
+      {
+        fetcher: async () => ({
+          ok: true,
+          status: 200,
+          json: async () => ({
+            status: {
+              text: "My take: read this https://x.com/i/article/2117447529424203776",
+              raw_text: { text: "My take: read this https://t.co/article123" },
+              media: {},
+              article: {
+                title: "Article headline",
+                preview_text: "A".repeat(400),
+                content: { blocks: [] },
+                media_entities: [],
+              },
+            },
+          }),
+        }),
+      },
+    );
+
+    expect(result.status).toBe("success");
+    expect(result.draft.body).toBe(
+      `My take: read this\n\nArticle headline\n\n${"A".repeat(280)}…`,
+    );
+  });
+
+  it("keeps article tweet text when article details and cover are absent", async () => {
+    const result = await importTweetFromUrl(
+      "https://x.com/binancezh/status/2117448637127233906",
+      {
+        fetcher: async () => ({
+          ok: true,
+          status: 200,
+          json: async () => ({
+            status: {
+              raw_text: { text: "Read my note https://t.co/article123" },
+              article: {},
+            },
+          }),
+        }),
+      },
+    );
+
+    expect(result.status).toBe("success");
+    expect(result.draft.body).toBe("Read my note");
+    expect(result.draft.mediaUrls).toEqual([]);
+  });
+
   it("formats raw x created_at timestamps into a compact footer label", async () => {
     const result = await importTweetFromUrl(
       "https://x.com/Pluvio9yte/status/2049742800049316039",
