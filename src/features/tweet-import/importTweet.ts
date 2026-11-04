@@ -39,6 +39,11 @@ type ArticleBlock = {
   entityRanges?: Array<{ key?: string | number }>;
 };
 
+type ArticleEntity = {
+  type?: string;
+  data?: { mediaItems?: Array<{ mediaId?: string | number }> };
+};
+
 type RichTweetStatus = RichTweetMetrics & {
   text?: string;
   raw_text?: {
@@ -49,13 +54,9 @@ type RichTweetStatus = RichTweetMetrics & {
     preview_text?: string;
     content?: {
       blocks?: ArticleBlock[];
-      entityMap?: Array<{
-        key?: string | number;
-        value?: {
-          type?: string;
-          data?: { mediaItems?: Array<{ mediaId?: string | number }> };
-        };
-      }>;
+      entityMap?:
+        | Array<{ key?: string | number; value?: ArticleEntity }>
+        | Record<string, ArticleEntity>;
     };
     media_entities?: Array<{
       media_id?: string | number;
@@ -651,6 +652,15 @@ function extractArticle(status: RichTweetStatus): {
   }
 
   const mediaUrls: string[] = [];
+  const rawEntityMap = article?.content?.entityMap;
+  const entityMap = Array.isArray(rawEntityMap)
+    ? rawEntityMap
+    : rawEntityMap && typeof rawEntityMap === "object"
+      ? Object.entries(rawEntityMap).map(([key, value]) => ({ key, value }))
+      : [];
+  const mediaEntities = Array.isArray(article?.media_entities)
+    ? article.media_entities
+    : [];
   let orderedIndex = 0;
   for (const block of blocks) {
     if (!block || typeof block !== "object") {
@@ -660,17 +670,18 @@ function extractArticle(status: RichTweetStatus): {
       for (const range of Array.isArray(block.entityRanges)
         ? block.entityRanges
         : []) {
-        const entity = article?.content?.entityMap?.find(
-          (item) => item?.key === range?.key,
+        const entity = entityMap.find(
+          (item) => String(item?.key) === String(range?.key),
         );
         if (entity?.value?.type !== "MEDIA") {
           continue;
         }
-        for (const item of entity.value.data?.mediaItems ?? []) {
+        const mediaItems = entity.value.data?.mediaItems;
+        for (const item of Array.isArray(mediaItems) ? mediaItems : []) {
           if (item?.mediaId === undefined || item.mediaId === null) {
             continue;
           }
-          const media = article?.media_entities?.find(
+          const media = mediaEntities.find(
             (candidate) => String(candidate?.media_id) === String(item?.mediaId),
           );
           const url = normalizeAssetUrl(

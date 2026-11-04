@@ -176,6 +176,92 @@ describe("importTweetFromUrl", () => {
     ]);
   });
 
+  it("matches string entityMap keys to numeric atomic range keys", async () => {
+    const result = await importTweetFromUrl("https://x.com/example/status/123", {
+      fetcher: async () => ({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          status: {
+            article: {
+              title: "Photo essay",
+              content: {
+                blocks: [
+                  { type: "atomic", entityRanges: [{ key: 1, offset: 0, length: 1 }] },
+                ],
+                entityMap: [
+                  { key: "1", value: { type: "MEDIA", data: { mediaItems: [{ mediaId: "photo" }] } } },
+                ],
+              },
+              media_entities: [
+                { media_id: "photo", media_info: { original_img_url: "https://img.test/photo.jpg" } },
+              ],
+            },
+          },
+        }),
+      }),
+    });
+
+    expect(result.status).toBe("success");
+    expect(result.draft.mediaUrls).toEqual(["https://img.test/photo.jpg"]);
+  });
+
+  it("imports inline media from a Draft.js object entityMap", async () => {
+    const result = await importTweetFromUrl("https://x.com/example/status/123", {
+      fetcher: async () => ({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          status: {
+            article: {
+              title: "Object map",
+              content: {
+                blocks: [{ type: "atomic", entityRanges: [{ key: 0 }] }],
+                entityMap: {
+                  "0": { type: "MEDIA", data: { mediaItems: [{ mediaId: "photo" }] } },
+                },
+              },
+              media_entities: [
+                { media_id: "photo", media_info: { original_img_url: "https://img.test/photo.jpg" } },
+              ],
+            },
+          },
+        }),
+      }),
+    });
+
+    expect(result.status).toBe("success");
+    expect(result.draft.mediaUrls).toEqual(["https://img.test/photo.jpg"]);
+  });
+
+  it.each([
+    { name: "entityMap", entityMap: "invalid", mediaEntities: [{ media_id: "photo" }] },
+    { name: "mediaItems", entityMap: [{ key: 0, value: { type: "MEDIA", data: { mediaItems: { 0: { mediaId: "photo" } } } } }], mediaEntities: [{ media_id: "photo" }] },
+    { name: "media_entities", entityMap: [{ key: 0, value: { type: "MEDIA", data: { mediaItems: [{ mediaId: "photo" }] } } }], mediaEntities: "invalid" },
+  ])("keeps article import when $name is not an array", async ({ entityMap, mediaEntities }) => {
+    const result = await importTweetFromUrl("https://x.com/example/status/123", {
+      fetcher: async () => ({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          status: {
+            article: {
+              title: "Still an article",
+              content: {
+                blocks: [{ type: "atomic", entityRanges: [{ key: 0 }] }],
+                entityMap,
+              },
+              media_entities: mediaEntities,
+            },
+          },
+        }),
+      }),
+    });
+
+    expect(result.status).toBe("success");
+    expect(result.draft.body).toBe("Still an article");
+  });
+
   it("ignores incomplete article entities and limits images to four", async () => {
     const result = await importTweetFromUrl(
       "https://x.com/binancezh/status/2117448637127233906",
